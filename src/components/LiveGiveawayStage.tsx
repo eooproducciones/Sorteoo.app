@@ -121,11 +121,14 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
     if (!ctx) return;
 
     // Supported mimeType for video recording
+    // Supported mimeType for video recording (prioritizing MP4 for native Safari/iOS compatibility)
     const mimeTypes = [
+      'video/mp4;codecs=avc1',
+      'video/mp4',
+      'video/webm;codecs=h264',
       'video/webm;codecs=vp9',
       'video/webm;codecs=vp8',
       'video/webm',
-      'video/mp4',
     ];
     let selectedMimeType = '';
     for (const type of mimeTypes) {
@@ -309,15 +312,22 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
       const mascotImg = imageCache.current.get('app_mascot');
       const headerY = 195;
       if (mascotImg && mascotImg.complete && mascotImg.naturalWidth > 0) {
-        const mascotSize = 64;
-        ctx.drawImage(mascotImg, CANVAS_WIDTH / 2 - 190, headerY - 50, mascotSize, mascotSize);
+        const mascotSize = 84;
+        ctx.drawImage(mascotImg, CANVAS_WIDTH / 2 - 210, headerY - 58, mascotSize, mascotSize);
         ctx.fillStyle = '#18181B';
-        ctx.font = '900 48px "Plus Jakarta Sans", sans-serif';
+        ctx.font = '900 50px "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'left';
-        ctx.fillText('sorteoo.app', CANVAS_WIDTH / 2 - 110, headerY);
+        ctx.fillText('sorteoo', CANVAS_WIDTH / 2 - 110, headerY);
+        // Instagram sunset gradient for .app
+        const appGrad = ctx.createLinearGradient(CANVAS_WIDTH / 2 + 75, headerY - 30, CANVAS_WIDTH / 2 + 180, headerY);
+        appGrad.addColorStop(0, '#F58529');
+        appGrad.addColorStop(0.5, '#DD2A7B');
+        appGrad.addColorStop(1, '#8134AF');
+        ctx.fillStyle = appGrad;
+        ctx.fillText('.app', CANVAS_WIDTH / 2 + 75, headerY);
       } else {
         ctx.fillStyle = '#18181B';
-        ctx.font = '900 48px "Plus Jakarta Sans", sans-serif';
+        ctx.font = '900 50px "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('🎁 sorteoo.app', CANVAS_WIDTH / 2, headerY);
       }
@@ -398,12 +408,12 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
         roundRect(ctx, barX, barY, barW, barH, 10);
         ctx.fill();
 
-        // Active animated gradient bar
+        // Active animated gradient bar in Instagram sunset palette
         const fillW = Math.max(20, barW * progress);
         const barGrad = ctx.createLinearGradient(barX, barY, barX + fillW, barY);
-        barGrad.addColorStop(0, '#EF4444');
-        barGrad.addColorStop(0.5, '#F43F5E');
-        barGrad.addColorStop(1, '#F59E0B');
+        barGrad.addColorStop(0, '#F58529');
+        barGrad.addColorStop(0.5, '#DD2A7B');
+        barGrad.addColorStop(1, '#8134AF');
         ctx.fillStyle = barGrad;
         roundRect(ctx, barX, barY, fillW, barH, 10);
         ctx.fill();
@@ -595,18 +605,18 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
           ctx.shadowBlur = 0;
           // Border in vibrant Instagram gradient
           const borderGrad = ctx.createLinearGradient(cardX, cardY, cardX + cardW, cardY + cardH);
-          borderGrad.addColorStop(0, '#EF4444');
-          borderGrad.addColorStop(0.5, '#F43F5E');
-          borderGrad.addColorStop(1, '#F59E0B');
+          borderGrad.addColorStop(0, '#F58529');
+          borderGrad.addColorStop(0.5, '#DD2A7B');
+          borderGrad.addColorStop(1, '#8134AF');
           ctx.strokeStyle = borderGrad;
           ctx.lineWidth = 5;
           ctx.stroke();
 
           // Badge: "👑 GANADOR 1 👑" or "GANADOR 1 de N"
           const badgeGrad = ctx.createLinearGradient(CANVAS_WIDTH / 2 - 210, cardY - 26, CANVAS_WIDTH / 2 + 210, cardY + 26);
-          badgeGrad.addColorStop(0, '#EF4444');
-          badgeGrad.addColorStop(0.5, '#F43F5E');
-          badgeGrad.addColorStop(1, '#F59E0B');
+          badgeGrad.addColorStop(0, '#F58529');
+          badgeGrad.addColorStop(0.5, '#DD2A7B');
+          badgeGrad.addColorStop(1, '#8134AF');
           ctx.fillStyle = badgeGrad;
           const badgeText = totalWinners > 1 ? `👑 GANADOR ${currentWinnerIdx + 1} DE ${totalWinners} 👑` : '👑 ¡GANADOR OFICIAL! 👑';
           roundRect(ctx, CANVAS_WIDTH / 2 - 210, cardY - 26, 420, 52, 26);

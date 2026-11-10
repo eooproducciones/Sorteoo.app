@@ -1401,18 +1401,31 @@ app.post('/api/giveaways/:id/video', (req: any, res) => {
 
     saveDB(db);
 
+    // Helper for 100% Apple QuickTime macOS, iPhone iOS Photos, WhatsApp, and Instagram compatible MP4
+    const convertToUniversalMp4 = async (src: string, dst: string) => {
+      try {
+        await execAsync(
+          `ffmpeg -y -i "${src}" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -map 0:v:0 -map 1:a:0 -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -r 30 -c:a aac -b:a 128k -ar 44100 -shortest -movflags +faststart "${dst}"`
+        );
+        return fs.existsSync(dst) && fs.statSync(dst).size > 1000;
+      } catch (err: any) {
+        try {
+          await execAsync(
+            `ffmpeg -y -i "${src}" -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -r 30 -movflags +faststart "${dst}"`
+          );
+          return fs.existsSync(dst) && fs.statSync(dst).size > 1000;
+        } catch (err2: any) {
+          console.warn('ffmpeg conversion warning:', err2.message);
+          return false;
+        }
+      }
+    };
+
     // Asynchronous ffmpeg conversion to universal H.264 MP4 if original is WebM and valid
     if (ext !== 'mp4' && buffer.length >= 1000) {
-      exec(
-        `ffmpeg -y -i "${filePath}" -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -movflags +faststart "${mp4FilePath}"`,
-        (convErr) => {
-          if (convErr) {
-            console.warn('ffmpeg background conversion note:', convErr.message);
-          } else {
-            console.log(`Video universal MP4 created: ${mp4Filename}`);
-          }
-        }
-      );
+      convertToUniversalMp4(filePath, mp4FilePath).then((ok) => {
+        if (ok) console.log(`Video universal MP4 ready: ${mp4Filename}`);
+      });
     }
 
     return res.json({
@@ -1473,7 +1486,7 @@ app.get('/api/giveaways/:id/video-stream', (req, res) => {
   }
 });
 
-// Dedicated video download endpoint converting on-the-fly to universal MP4 (QuickTime macOS, iOS, Android, Windows)
+// Dedicated video download endpoint converting to universal MP4 (QuickTime macOS, iOS, Android, Windows, WhatsApp)
 app.get(['/api/giveaways/:id/download-video', '/api/giveaways/:id/download-mp4'], async (req, res) => {
   try {
     const db = loadDB();
@@ -1505,7 +1518,7 @@ app.get(['/api/giveaways/:id/download-video', '/api/giveaways/:id/download-mp4']
       if (origStat.size >= 1000) {
         try {
           await execAsync(
-            `ffmpeg -y -i "${originalPath}" -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -movflags +faststart "${mp4Path}"`
+            `ffmpeg -y -i "${originalPath}" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -map 0:v:0 -map 1:a:0 -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -r 30 -c:a aac -b:a 128k -ar 44100 -shortest -movflags +faststart "${mp4Path}"`
           );
           if (fs.existsSync(mp4Path)) {
             const stat = fs.statSync(mp4Path);
@@ -1517,7 +1530,23 @@ app.get(['/api/giveaways/:id/download-video', '/api/giveaways/:id/download-mp4']
             return fs.createReadStream(mp4Path).pipe(res);
           }
         } catch (cErr: any) {
-          console.warn('ffmpeg on-the-fly conversion note:', cErr.message);
+          // Fallback conversion without lavfi audio
+          try {
+            await execAsync(
+              `ffmpeg -y -i "${originalPath}" -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -r 30 -movflags +faststart "${mp4Path}"`
+            );
+            if (fs.existsSync(mp4Path)) {
+              const stat = fs.statSync(mp4Path);
+              res.writeHead(200, {
+                'Content-Length': stat.size,
+                'Content-Type': 'video/mp4',
+                'Content-Disposition': `attachment; filename="sorteoo_${giveaway.id}.mp4"`,
+              });
+              return fs.createReadStream(mp4Path).pipe(res);
+            }
+          } catch (cErr2: any) {
+            console.warn('ffmpeg on-the-fly conversion note:', cErr2.message);
+          }
         }
       }
 

@@ -507,8 +507,14 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
     });
   };
 
-  // Compute live filter results
-  const filterResults = filterParticipants(rawParticipants, filters);
+  // Compute live filter results (automatically excluding host page and participating multibrand accounts)
+  const multibrandAccounts = (multibrandBrandsConfig || []).map((b) => b.brandInstagram);
+  const filterResults = filterParticipants(
+    rawParticipants,
+    filters,
+    postDetails?.author,
+    multibrandAccounts
+  );
 
   // Multibrand Unification confirmed callback: receives configured brands (1 winner per brand)
   const handleConfirmMultibrand = (

@@ -3,9 +3,7 @@ import {
   Sparkles,
   ArrowRight,
   ShieldCheck,
-  Zap,
   CheckCircle2,
-  Clock,
   Layers,
   AtSign,
   Link as LinkIcon,
@@ -46,119 +44,124 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onStartGiveaway }) => 
             {/* Main Title: Hace tu sorteo, facil y rapido */}
             <h1 className="text-4xl sm:text-6xl lg:text-6xl font-black text-neutral-900 tracking-tight leading-[1.12] text-balance">
               Hacé tu sorteo,{' '}
-              <span className="bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] bg-clip-text text-transparent">
                 fácil y rápido
               </span>
               .
             </h1>
 
-            {/* Slash of Giveaway Options: Running Animated Ticker */}
+            {/* Options Animation: Continuous Running Marquee without slashes */}
             <div className="pt-1 space-y-2 max-w-full overflow-hidden">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                  <span className="w-2 h-2 rounded-full bg-[#DD2A7B] animate-pulse" />
                   Elegí cómo querés sortear:
                 </p>
-                <span className="text-[11px] font-bold text-rose-500 lg:hidden">
-                  Deslizá o tocá para sortear
-                </span>
               </div>
 
-              {/* Running Animated Strip */}
+              {/* Running Animated Ribbon */}
               <div
-                className="relative w-full overflow-hidden py-1.5 bg-neutral-50/80 rounded-2xl border border-neutral-200/90 shadow-xs"
+                className="relative w-full overflow-hidden py-2 bg-gradient-to-r from-neutral-50 via-rose-50/30 to-amber-50/30 rounded-2xl border border-neutral-200/90 shadow-xs"
                 style={{
                   maskImage: 'linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%)',
                   WebkitMaskImage: 'linear-gradient(to right, transparent 0%, black 5%, black 95%, transparent 100%)',
                 }}
               >
-                <div className="animate-marquee flex items-center gap-2 select-none">
+                <div className="animate-marquee flex items-center gap-3 select-none">
                   {/* First repetition */}
-                  {modalities.map((item, idx) => (
-                    <React.Fragment key={`m1-${item.label}`}>
-                      <button
-                        type="button"
-                        onClick={() => onStartGiveaway()}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-rose-50 border border-neutral-200/90 hover:border-rose-400 text-xs sm:text-sm font-black text-neutral-800 hover:text-rose-600 transition-all cursor-pointer shadow-xs shrink-0 active:scale-95"
-                      >
+                  {modalities.map((item) => (
+                    <button
+                      key={`m1-${item.label}`}
+                      type="button"
+                      onClick={() => onStartGiveaway()}
+                      className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-white hover:bg-gradient-to-r hover:from-amber-50 hover:to-rose-50 border-2 border-neutral-200 hover:border-[#DD2A7B] text-xs sm:text-sm font-black text-neutral-800 hover:text-[#DD2A7B] transition-all cursor-pointer shadow-xs shrink-0 active:scale-95 group"
+                    >
+                      <span className="p-1 rounded-full bg-neutral-100 group-hover:bg-gradient-to-tr group-hover:from-[#F58529] group-hover:via-[#DD2A7B] group-hover:to-[#8134AF] group-hover:text-white transition-all">
                         {item.icon}
-                        <span>{item.label}</span>
-                      </button>
-                      <span className="text-rose-400 font-black px-1.5 text-base shrink-0 select-none">/</span>
-                    </React.Fragment>
+                      </span>
+                      <span>{item.label}</span>
+                    </button>
                   ))}
-                  {/* Second repetition for seamless continuous loop */}
-                  {modalities.map((item, idx) => (
-                    <React.Fragment key={`m2-${item.label}`}>
-                      <button
-                        type="button"
-                        onClick={() => onStartGiveaway()}
-                        className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white hover:bg-rose-50 border border-neutral-200/90 hover:border-rose-400 text-xs sm:text-sm font-black text-neutral-800 hover:text-rose-600 transition-all cursor-pointer shadow-xs shrink-0 active:scale-95"
-                      >
+                  {/* Second repetition for continuous smooth loop */}
+                  {modalities.map((item) => (
+                    <button
+                      key={`m2-${item.label}`}
+                      type="button"
+                      onClick={() => onStartGiveaway()}
+                      className="inline-flex items-center gap-2.5 px-4 py-2 rounded-full bg-white hover:bg-gradient-to-r hover:from-amber-50 hover:to-rose-50 border-2 border-neutral-200 hover:border-[#DD2A7B] text-xs sm:text-sm font-black text-neutral-800 hover:text-[#DD2A7B] transition-all cursor-pointer shadow-xs shrink-0 active:scale-95 group"
+                    >
+                      <span className="p-1 rounded-full bg-neutral-100 group-hover:bg-gradient-to-tr group-hover:from-[#F58529] group-hover:via-[#DD2A7B] group-hover:to-[#8134AF] group-hover:text-white transition-all">
                         {item.icon}
-                        <span>{item.label}</span>
-                      </button>
-                      <span className="text-rose-400 font-black px-1.5 text-base shrink-0 select-none">/</span>
-                    </React.Fragment>
+                      </span>
+                      <span>{item.label}</span>
+                    </button>
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* Main CTA: Big SORTEAR Button */}
+            {/* Main CTA: Big SORTEAR Button with Instagram Sunset Gradient */}
             <div className="pt-3 flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4">
               <button
                 type="button"
                 onClick={() => onStartGiveaway()}
-                className="w-full sm:w-auto px-12 py-5 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white font-black text-lg sm:text-xl rounded-2xl shadow-xl shadow-rose-500/30 ring-4 ring-rose-500/20 hover:ring-rose-500/40 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 cursor-pointer uppercase tracking-wider"
+                className="w-full sm:w-auto px-14 py-5 bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] hover:opacity-95 text-white font-black text-lg sm:text-xl rounded-2xl shadow-xl shadow-[#DD2A7B]/30 ring-4 ring-[#DD2A7B]/20 hover:ring-[#DD2A7B]/40 transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 cursor-pointer uppercase tracking-wider"
               >
                 <span>SORTEAR</span>
                 <ArrowRight className="w-5 h-5 stroke-[3]" />
               </button>
             </div>
 
-            {/* Trust Line: Sin suscripciones. Sin loguearte. Sin esperas. Verificador oficial. */}
-            <div className="pt-1 flex flex-wrap items-center justify-center lg:justify-start gap-x-3 gap-y-1.5 text-xs font-bold text-neutral-600">
-              <span className="inline-flex items-center gap-1 text-neutral-800">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+            {/* Trust Line: Sin suscripciones. Sin loguearte. Sin esperas. Verificador oficial. (All with green check icon) */}
+            <div className="pt-1 flex flex-wrap items-center justify-center lg:justify-start gap-x-3 gap-y-1.5 text-xs font-bold text-neutral-700">
+              <span className="inline-flex items-center gap-1.5 text-neutral-800">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>Sin suscripciones</span>
               </span>
               <span className="text-neutral-300">·</span>
-              <span className="inline-flex items-center gap-1 text-neutral-800">
-                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span className="inline-flex items-center gap-1.5 text-neutral-800">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>Sin loguearte</span>
               </span>
               <span className="text-neutral-300">·</span>
-              <span className="inline-flex items-center gap-1 text-neutral-800">
-                <Clock className="w-4 h-4 text-rose-500" />
+              <span className="inline-flex items-center gap-1.5 text-neutral-800">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>Sin esperas</span>
               </span>
               <span className="text-neutral-300">·</span>
-              <span className="inline-flex items-center gap-1 text-neutral-800">
-                <ShieldCheck className="w-4 h-4 text-purple-500" />
+              <span className="inline-flex items-center gap-1.5 text-neutral-800">
+                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
                 <span>Verificador oficial</span>
               </span>
             </div>
 
-            {/* Cheerful highlight stats */}
-            <div className="pt-5 border-t border-neutral-100 grid grid-cols-3 gap-4 max-w-md mx-auto lg:mx-0 text-center lg:text-left">
-              <div>
-                <span className="block text-2xl font-black bg-gradient-to-r from-red-500 to-rose-500 bg-clip-text text-transparent">
-                  100%
-                </span>
-                <span className="text-xs font-semibold text-neutral-500">Gratis y transparente</span>
-              </div>
-              <div>
-                <span className="block text-2xl font-black bg-gradient-to-r from-rose-500 to-purple-500 bg-clip-text text-transparent">
-                  9:16
-                </span>
-                <span className="text-xs font-semibold text-neutral-500">Video Reels & Stories</span>
-              </div>
-              <div>
-                <span className="block text-2xl font-black bg-gradient-to-r from-purple-500 to-amber-500 bg-clip-text text-transparent">
-                  +1.4M
-                </span>
-                <span className="text-xs font-semibold text-neutral-500">Comentarios sorteados</span>
+            {/* Enclosed rounded box for key stats to avoid visual clutter */}
+            <div className="mt-5 p-4 sm:p-5 rounded-3xl bg-neutral-50/90 border border-neutral-200/90 shadow-xs max-w-lg mx-auto lg:mx-0">
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="space-y-0.5">
+                  <span className="block text-2xl sm:text-3xl font-black bg-gradient-to-r from-red-500 to-rose-500 bg-clip-text text-transparent">
+                    100%
+                  </span>
+                  <span className="text-xs font-bold text-neutral-600 block leading-tight">
+                    Auditado y certificado
+                  </span>
+                </div>
+                <div className="space-y-0.5 border-x border-neutral-200/80 px-2">
+                  <span className="block text-2xl sm:text-3xl font-black bg-gradient-to-r from-rose-500 to-purple-500 bg-clip-text text-transparent">
+                    9:16
+                  </span>
+                  <span className="text-xs font-bold text-neutral-600 block leading-tight">
+                    Video Reels & Stories
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="block text-2xl sm:text-3xl font-black bg-gradient-to-r from-purple-500 to-amber-500 bg-clip-text text-transparent">
+                    +1.4M
+                  </span>
+                  <span className="text-xs font-bold text-neutral-600 block leading-tight">
+                    Comentarios sorteados
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -200,7 +203,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onStartGiveaway }) => 
                   </div>
 
                   <span className="px-2.5 py-1 rounded-xl bg-rose-50 text-rose-600 font-black text-[11px] border border-rose-200">
-                    GRATIS 🎁
+                    CERTIFICADO 🎁
                   </span>
                 </div>
 
@@ -246,7 +249,7 @@ export const LandingHero: React.FC<LandingHeroProps> = ({ onStartGiveaway }) => 
                         ¿Cuántos ganadores?
                       </span>
                       <span className="text-[11px] font-bold text-emerald-600 block">
-                        + Suplentes incluidos gratis
+                        + Suplentes incluidos
                       </span>
                     </div>
                   </div>

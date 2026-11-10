@@ -76,11 +76,13 @@ function MainApp() {
     try {
       // 1. Execute deterministic cryptographic selection (with brand & prize assignment for Multimarcas)
       const brandsConfig = (config.postDetails as any)?.multibrandBrandsConfig;
+      const hostAuthor = config.postDetails?.author;
       const drawResult = await executeDraw(
         config.participants,
         config.winnersCount,
         config.substitutesCount,
-        brandsConfig
+        brandsConfig,
+        hostAuthor
       );
 
       // 2. Prepare state for live 9:16 stage

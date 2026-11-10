@@ -13,7 +13,9 @@ export interface FilterResult {
 
 export function filterParticipants(
   rawParticipants: Participant[],
-  filters: GiveawayFilters
+  filters: GiveawayFilters,
+  hostAuthor?: string,
+  multibrandAccounts?: string[]
 ): FilterResult {
   const reasons = {
     duplicateUser: 0,
@@ -24,6 +26,21 @@ export function filterParticipants(
 
   const seenUsers = new Set<string>();
   const excludedLower = new Set(filters.excludedUsers.map((u) => u.trim().toLowerCase().replace('@', '')));
+
+  // Automatically exclude host/organizer page so the page running the draw can NEVER win
+  if (hostAuthor) {
+    const cleanHost = hostAuthor.trim().toLowerCase().replace('@', '');
+    if (cleanHost) excludedLower.add(cleanHost);
+  }
+
+  // Automatically exclude participating multibrand business accounts
+  if (multibrandAccounts && multibrandAccounts.length > 0) {
+    multibrandAccounts.forEach((brand) => {
+      const cleanBrand = (brand || '').trim().toLowerCase().replace('@', '');
+      if (cleanBrand) excludedLower.add(cleanBrand);
+    });
+  }
+
   const requiredKeywordLower = filters.requiredKeyword.trim().toLowerCase();
 
   const validParticipants: Participant[] = [];
@@ -31,7 +48,7 @@ export function filterParticipants(
   for (const p of rawParticipants) {
     const cleanUser = p.username.trim().toLowerCase().replace('@', '');
 
-    // 1. Blacklist check
+    // 1. Blacklist & Host account check (host page can never participate or win)
     if (excludedLower.has(cleanUser)) {
       reasons.blacklist++;
       continue;
@@ -99,23 +116,46 @@ export async function executeDraw(
   participants: Participant[],
   winnersCount: number,
   substitutesCount: number,
-  brandsConfig?: Array<{ brandInstagram: string; prize: string }>
+  brandsConfig?: Array<{ brandInstagram: string; prize: string }>,
+  hostAuthor?: string
 ): Promise<DrawResult> {
   if (participants.length === 0) {
     throw new Error('No hay participantes válidos para sortear');
   }
 
+  // 1. Strictly filter out the host account and any participating brand accounts
+  const forbiddenAccounts = new Set<string>();
+  if (hostAuthor) {
+    const cleanHost = hostAuthor.trim().toLowerCase().replace('@', '');
+    if (cleanHost) forbiddenAccounts.add(cleanHost);
+  }
+  if (brandsConfig) {
+    brandsConfig.forEach((b) => {
+      const cleanB = (b.brandInstagram || '').trim().toLowerCase().replace('@', '');
+      if (cleanB) forbiddenAccounts.add(cleanB);
+    });
+  }
+
+  // Filter pool to guarantee host and brands are never in the draw
+  let pool = participants.filter((p) => {
+    const cleanUser = p.username.trim().toLowerCase().replace('@', '');
+    return !forbiddenAccounts.has(cleanUser);
+  });
+
+  if (pool.length === 0) {
+    throw new Error('No hay participantes válidos después de excluir la cuenta organizadora');
+  }
+
   // Count unique individuals in the pool
-  const uniqueUsers = new Set(participants.map((p) => p.username.trim().toLowerCase().replace('@', '')));
+  const uniqueUsers = new Set(pool.map((p) => p.username.trim().toLowerCase().replace('@', '')));
   const totalRequired = winnersCount + substitutesCount;
   if (uniqueUsers.size < totalRequired) {
     throw new Error(
-      `Participantes únicos insuficientes (${uniqueUsers.size}). Se necesitan al menos ${totalRequired} personas distintas (${winnersCount} ganadores + ${substitutesCount} suplentes). Cada persona solo puede ganar una vez.`
+      `Participantes únicos insuficientes (${uniqueUsers.size}). Se necesitan al menos ${totalRequired} personas distintas (${winnersCount} ganadores + ${substitutesCount} suplentes) sin contar la cuenta organizadora. Cada persona solo puede ganar una vez.`
     );
   }
 
-  // Work on a mutable copy of pool
-  let pool = [...participants];
+  // Work on a mutable copy of pool with strict deduplication
   const selected: Participant[] = [];
   const chosenUsernames = new Set<string>();
 
@@ -123,12 +163,20 @@ export async function executeDraw(
     if (pool.length === 0) break;
     const randomIndex = secureRandomInt(pool.length);
     const chosen = pool[randomIndex];
-    selected.push(chosen);
-
     const chosenKey = chosen.username.trim().toLowerCase().replace('@', '');
+
+    // If somehow already chosen, purge and retry
+    if (chosenUsernames.has(chosenKey)) {
+      pool = pool.filter((p) => p.username.trim().toLowerCase().replace('@', '') !== chosenKey);
+      i--;
+      continue;
+    }
+
+    selected.push(chosen);
     chosenUsernames.add(chosenKey);
 
-    // CRITICAL: Eliminate ALL entries/comments belonging to this person so they CANNOT win again or be selected twice!
+    // CRITICAL: Eliminate ALL entries/comments belonging to this person so they CANNOT win again,
+    // be selected twice, or appear in both winners and substitutes!
     pool = pool.filter((p) => p.username.trim().toLowerCase().replace('@', '') !== chosenKey);
   }
 

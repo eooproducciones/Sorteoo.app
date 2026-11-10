@@ -17,7 +17,9 @@ import {
   AlertCircle,
   FileCheck,
   X,
-  FileText
+  FileText,
+  MessageCircle,
+  Smartphone
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -77,29 +79,29 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
       const response = await fetch(downloadUrl);
       if (response.ok) {
         const blob = await response.blob();
-        const url = URL.createObjectURL(blob);
+        const mp4Blob = new Blob([blob], { type: 'video/mp4' });
+        const url = URL.createObjectURL(mp4Blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = `sorteoo_ganadores_${giveaway.id}.mp4`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
       } else {
         throw new Error('Endpoint returned ' + response.status);
       }
     } catch (err) {
       console.warn('Direct fetch failed, falling back to local recording blob:', err);
       if (videoBlob) {
-        const isMp4 = videoBlob.type.includes('mp4');
         const url = URL.createObjectURL(videoBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `sorteoo_ganadores_${giveaway.id}.${isMp4 ? 'mp4' : 'webm'}`;
+        a.download = `sorteoo_ganadores_${giveaway.id}.mp4`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 2000);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
       }
     } finally {
       setTimeout(() => setDownloadingVideo(false), 800);
@@ -149,36 +151,49 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
     return text;
   };
 
-  // Handle Share in Instagram button with deep links and native mobile sharing
-  const handleOpenInstagramShare = async () => {
-    const shareText = generateInstagramCaption();
-
-    // Check if mobile device supports Web Share API
-    if (navigator.share) {
-      try {
-        if (videoBlob && navigator.canShare && navigator.canShare({ files: [new File([videoBlob], 'sorteoo.mp4', { type: 'video/mp4' })] })) {
-          const file = new File([videoBlob], `sorteoo_sorteo_${giveaway.id}.mp4`, { type: 'video/mp4' });
-          await navigator.share({
-            title: 'Ganadores Sorteo Instagram - sorteoo.app',
-            text: shareText,
-            files: [file],
-          });
-          return;
-        } else {
-          await navigator.share({
-            title: 'Ganadores Sorteo Instagram - sorteoo.app',
-            text: shareText,
-            url: `${window.location.origin}/#verify-${giveaway.audit.verificationCode}`,
-          });
-          return;
-        }
-      } catch (err: any) {
-        if (err.name === 'AbortError') return;
-      }
-    }
-
-    // Open Interactive Instagram Share Modal
+  // Open the interactive Instagram and multi-app share modal
+  const handleOpenInstagramShare = () => {
     setShareModalOpen(true);
+  };
+
+  // Native mobile sharing handler with MP4 file attachment
+  const handleNativeMobileShare = async () => {
+    const shareText = generateInstagramCaption();
+    try {
+      let fileToShare: File | null = null;
+      try {
+        const res = await fetch(`/api/giveaways/${giveaway.id}/download-video`);
+        if (res.ok) {
+          const blob = await res.blob();
+          fileToShare = new File([blob], `sorteoo_ganadores_${giveaway.id}.mp4`, { type: 'video/mp4' });
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      if (!fileToShare && videoBlob) {
+        fileToShare = new File([videoBlob], `sorteoo_ganadores_${giveaway.id}.mp4`, { type: 'video/mp4' });
+      }
+
+      if (navigator.share && fileToShare && navigator.canShare && navigator.canShare({ files: [fileToShare] })) {
+        await navigator.share({
+          title: 'Ganadores Sorteo Instagram - sorteoo.app',
+          text: shareText,
+          files: [fileToShare],
+        });
+        return;
+      } else if (navigator.share) {
+        await navigator.share({
+          title: 'Ganadores Sorteo Instagram - sorteoo.app',
+          text: shareText,
+          url: `${window.location.origin}/#verify-${giveaway.audit.verificationCode}`,
+        });
+        return;
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      console.warn('Native mobile share error:', err);
+    }
   };
 
   const copyInstagramCaption = () => {
@@ -630,7 +645,7 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
       {/* ====================================================================== */}
       {shareModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-neutral-900/60 backdrop-blur-md animate-in fade-in duration-150">
-          <div className="relative w-full max-w-lg bg-white border-2 border-rose-400/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
+          <div className="relative w-full max-w-lg bg-white border-2 border-rose-400/30 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6 max-h-[92vh] overflow-y-auto">
             <button
               type="button"
               onClick={() => setShareModalOpen(false)}
@@ -641,123 +656,162 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
             </button>
 
             <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-500 via-rose-500 to-fuchsia-600 flex items-center justify-center text-white shadow-lg shadow-rose-500/25">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] flex items-center justify-center text-white shadow-lg shadow-rose-500/25 shrink-0">
                 <Instagram className="w-6 h-6" />
               </div>
               <div>
                 <h3 className="text-lg sm:text-xl font-black text-neutral-900">Compartir en Instagram</h3>
                 <p className="text-xs text-neutral-500">
-                  Subí el video y publicá los ganadores en Stories o Reels
+                  Subí el video a tus Historias o Reels en 3 pasos sencillos
                 </p>
               </div>
             </div>
 
-            {/* Direct Interactive Instagram Action Buttons */}
+            {/* Step-by-Step Practical Sharing Action Flow */}
             <div className="space-y-3">
-              {/* Option 1: Stories Deep Link */}
-              <a
-                href="instagram://story-camera"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  setTimeout(() => {
-                    window.open('https://www.instagram.com/', '_blank');
-                  }, 600);
-                }}
-                className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-rose-50 via-pink-50 to-amber-50 hover:from-rose-100 hover:to-amber-100 border border-rose-200 rounded-2xl transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-rose-500 flex items-center justify-center text-white shrink-0">
-                    <Instagram className="w-5 h-5" />
-                  </div>
-                  <div className="text-left">
-                    <span className="text-xs sm:text-sm font-black text-neutral-900 block">
-                      Subir a Historias (Stories)
-                    </span>
-                    <span className="text-[11px] text-neutral-500 block">
-                      Abre la cámara de historias en Instagram
-                    </span>
-                  </div>
-                </div>
-                <ExternalLink className="w-4 h-4 text-rose-500 group-hover:translate-x-0.5 transition-transform shrink-0" />
-              </a>
-
-              {/* Option 2: Reels / Camera Deep Link */}
-              <a
-                href="instagram://camera"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => {
-                  setTimeout(() => {
-                    window.open('https://www.instagram.com/', '_blank');
-                  }, 600);
-                }}
-                className="w-full flex items-center justify-between p-3.5 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-2xl transition-all group"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center shrink-0">
-                    <Instagram className="w-5 h-5" />
-                  </div>
-                  <div className="text-left">
-                    <span className="text-xs sm:text-sm font-black text-neutral-900 block">
-                      Subir Reel o Publicación
-                    </span>
-                    <span className="text-[11px] text-neutral-500 block">
-                      Abre la app de Instagram en el creador de publicaciones
-                    </span>
-                  </div>
-                </div>
-                <ExternalLink className="w-4 h-4 text-purple-600 group-hover:translate-x-0.5 transition-transform shrink-0" />
-              </a>
-
-              {/* Option 3: Copy Caption */}
-              <button
-                type="button"
-                onClick={copyInstagramCaption}
-                className="w-full flex items-center justify-between p-3.5 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-2xl transition-all text-left cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
-                    {copiedCaption ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
-                  </div>
-                  <div>
-                    <span className="text-xs sm:text-sm font-black text-neutral-900 block">
-                      {copiedCaption ? '¡Texto oficial copiado!' : 'Copiar texto para el pie de foto'}
-                    </span>
-                    <span className="text-[11px] text-neutral-500 block">
-                      Incluye ganadores, premios y código verificador
-                    </span>
-                  </div>
-                </div>
-                <span className="text-[11px] font-bold text-emerald-600 shrink-0">
-                  {copiedCaption ? 'Copiado' : 'Copiar'}
-                </span>
-              </button>
-
-              {/* Option 4: Download Video First */}
+              {/* Step 1: Download Video (MP4 Universal) */}
               <button
                 type="button"
                 onClick={handleDownloadVideo}
                 disabled={downloadingVideo}
-                className="w-full flex items-center justify-between p-3.5 bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 rounded-2xl transition-all text-left cursor-pointer"
+                className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-rose-50 via-pink-50 to-amber-50 hover:from-rose-100 hover:to-amber-100 border-2 border-rose-300/80 rounded-2xl transition-all text-left cursor-pointer group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#F58529] to-[#DD2A7B] text-white flex items-center justify-center shadow-xs shrink-0">
                     <Download className="w-5 h-5" />
                   </div>
                   <div>
-                    <span className="text-xs sm:text-sm font-black text-neutral-900 block">
-                      Descargar video al dispositivo
-                    </span>
-                    <span className="text-[11px] text-neutral-500 block">
-                      Archivo universal listo para adjuntar
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-200/60 text-rose-800">
+                        Paso 1
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-neutral-900">
+                        Descargar Video MP4
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-neutral-600 block mt-0.5">
+                      Compatible con iPhone, Mac, Android y WhatsApp
                     </span>
                   </div>
                 </div>
-                <span className="text-[11px] font-bold text-amber-600 shrink-0">
+                <span className="text-xs font-black text-[#DD2A7B] shrink-0 group-hover:scale-105 transition-transform">
                   {downloadingVideo ? 'Descargando...' : 'Descargar'}
                 </span>
               </button>
+
+              {/* Step 2: Copy Winners Caption Text */}
+              <button
+                type="button"
+                onClick={copyInstagramCaption}
+                className="w-full flex items-center justify-between p-3.5 bg-neutral-50 hover:bg-neutral-100 border-2 border-neutral-200 hover:border-emerald-300 rounded-2xl transition-all text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-xs shrink-0">
+                    {copiedCaption ? <Check className="w-5 h-5 stroke-[3]" /> : <Copy className="w-5 h-5" />}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-100 text-emerald-800">
+                        Paso 2
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-neutral-900">
+                        {copiedCaption ? '¡Texto oficial copiado!' : 'Copiar texto para el pie de foto'}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-neutral-500 block mt-0.5">
+                      Incluye ganadores, menciones y código verificador
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs font-black text-emerald-600 shrink-0">
+                  {copiedCaption ? '¡Copiado!' : 'Copiar'}
+                </span>
+              </button>
+
+              {/* Step 3: Open Instagram App or Web */}
+              <a
+                href="https://www.instagram.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  // Attempt safe app launch on mobile
+                  const now = Date.now();
+                  window.location.href = 'instagram://app';
+                  setTimeout(() => {
+                    if (Date.now() - now < 1500) {
+                      window.open('https://www.instagram.com/', '_blank');
+                    }
+                  }, 500);
+                }}
+                className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-neutral-50 to-purple-50 hover:from-neutral-100 hover:to-purple-100 border-2 border-neutral-200 hover:border-purple-300 rounded-2xl transition-all text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#8134AF] to-[#DD2A7B] text-white flex items-center justify-center shadow-xs shrink-0">
+                    <Instagram className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-100 text-purple-800">
+                        Paso 3
+                      </span>
+                      <span className="text-xs sm:text-sm font-black text-neutral-900">
+                        Abrir Instagram
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-neutral-500 block mt-0.5">
+                      Tocá '+' o 'Tu historia' y subí el video descargado
+                    </span>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-[#8134AF] group-hover:translate-x-0.5 transition-transform shrink-0" />
+              </a>
+
+              {/* Native Mobile Share Button (if supported on mobile browsers) */}
+              {typeof navigator !== 'undefined' && 'share' in navigator && (
+                <button
+                  type="button"
+                  onClick={handleNativeMobileShare}
+                  className="w-full flex items-center justify-between p-3.5 bg-neutral-900 hover:bg-black text-white rounded-2xl transition-all text-left cursor-pointer shadow-md group"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white/20 text-white flex items-center justify-center shrink-0">
+                      <Smartphone className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-xs sm:text-sm font-black block">
+                        Compartir directo desde el celular
+                      </span>
+                      <span className="text-[11px] text-neutral-300 block">
+                        Abre el menú de compartir de tu iPhone o Android
+                      </span>
+                    </div>
+                  </div>
+                  <Share2 className="w-4 h-4 text-white group-hover:scale-110 transition-transform shrink-0" />
+                </button>
+              )}
+
+              {/* WhatsApp Share Option */}
+              <a
+                href={`https://api.whatsapp.com/send?text=${encodeURIComponent(generateInstagramCaption())}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full flex items-center justify-between p-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-2xl transition-all text-left group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
+                    <MessageCircle className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <span className="text-xs sm:text-sm font-black text-emerald-950 block">
+                      Enviar resultados por WhatsApp
+                    </span>
+                    <span className="text-[11px] text-emerald-700 block">
+                      Comparte el texto y el enlace verificador en chats o grupos
+                    </span>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-emerald-600 group-hover:translate-x-0.5 transition-transform shrink-0" />
+              </a>
             </div>
           </div>
         </div>
