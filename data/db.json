@@ -1,0 +1,74 @@
+{
+  "users": [
+    {
+      "id": "usr_demo_creator",
+      "name": "Instagram Creator",
+      "email": "demo@sorteoo.app",
+      "passwordHash": "$2b$10$RvVy7OBv2KldSQRA6s5x6e85gawp0TNrR.Frap7WVRTnNJfDIuBTi",
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=sorteoo_creator",
+      "createdAt": "2026-10-15T05:01:22.093Z",
+      "instagramConfig": {
+        "appId": "108492048590123",
+        "isConnected": true
+      }
+    }
+  ],
+  "giveaways": [
+    {
+      "id": "srt_demo_101",
+      "userId": "usr_demo_creator",
+      "postUrl": "https://www.instagram.com/p/DAxK79qO3b/",
+      "postDetails": {
+        "shortcode": "DAxK79qO3b",
+        "author": "creator_official",
+        "likes": 1420,
+        "commentsCount": 48,
+        "caption": "🔥 ¡GRAN SORTEO ESPECIAL! Comenta etiquetando a tus amigos para participar. Anunciamos ganadores en sorteoo.app 🎁✨",
+        "imageUrl": "https://images.unsplash.com/photo-1513151233558-d860c5398176?w=600&auto=format&fit=crop&q=80"
+      },
+      "status": "completed",
+      "createdAt": "2026-10-14T18:30:00.000Z",
+      "totalParticipantsDetected": 48,
+      "validParticipantsCount": 42,
+      "filtersApplied": {
+        "minMentions": 1,
+        "removeDuplicateUsers": true,
+        "requiredKeyword": "",
+        "excludedUsers": ["bot_account", "spam_user"]
+      },
+      "winnersCount": 1,
+      "substitutesCount": 2,
+      "winners": [
+        {
+          "username": "sofia_martinez",
+          "comment": "¡Ojalá ganar este sorteo increíble! @lucas_valenzuela @camila.gomez #sorteoo #suerte",
+          "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=sofia_martinez",
+          "mentions": ["lucas_valenzuela", "camila.gomez"]
+        }
+      ],
+      "substitutes": [
+        {
+          "username": "lucas_valenzuela",
+          "comment": "Participando con todo 🔥 @valen_perez te etiquetas conmigo?",
+          "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=lucas_valenzuela"
+        },
+        {
+          "username": "camila.gomez",
+          "comment": "Me encanta! Quiero ganarlo si o si @matias_rodriguez @agustina_diaz #quieroganar",
+          "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=camila.gomez"
+        }
+      ],
+      "audit": {
+        "seed": "7f8b2c4e9102ab345cd678ef90123456",
+        "verificationCode": "SRT-DEMO-01",
+        "drawnAt": "2026-10-14T18:32:15.000Z",
+        "sha256Hash": "b2f68903c734e56598379469273c509214736f98ef4215f917540a854d9241b2"
+      },
+      "video": {
+        "hasVideo": false,
+        "videoDurationSeconds": 14,
+        "videoSizeFormatted": "3.8 MB"
+      }
+    }
+  ]
+}
