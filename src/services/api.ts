@@ -148,6 +148,29 @@ export const api = {
     });
   },
 
+  async uploadGiveawayVideoBinary(
+    giveawayId: string,
+    videoBlob: Blob,
+    mimeType: string,
+    durationSeconds: number
+  ) {
+    const query = new URLSearchParams({
+      mimeType: mimeType || 'video/webm',
+      durationSeconds: String(durationSeconds || 12),
+    }).toString();
+    const res = await fetch(`/api/giveaways/${giveawayId}/video-binary?${query}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': mimeType || 'application/octet-stream',
+      },
+      body: videoBlob,
+    });
+    if (!res.ok) {
+      throw new Error(`Error al subir video binario: HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+
   async deleteGiveaway(id: string) {
     return this.request(`/api/giveaways/${id}`, {
       method: 'DELETE',

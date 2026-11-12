@@ -34,7 +34,10 @@
         "minMentions": 1,
         "removeDuplicateUsers": true,
         "requiredKeyword": "",
-        "excludedUsers": ["bot_account", "spam_user"]
+        "excludedUsers": [
+          "bot_account",
+          "spam_user"
+        ]
       },
       "winnersCount": 1,
       "substitutesCount": 2,
@@ -43,7 +46,10 @@
           "username": "sofia_martinez",
           "comment": "¡Ojalá ganar este sorteo increíble! @lucas_valenzuela @camila.gomez #sorteoo #suerte",
           "avatarUrl": "https://api.dicebear.com/7.x/bottts/svg?seed=sofia_martinez",
-          "mentions": ["lucas_valenzuela", "camila.gomez"]
+          "mentions": [
+            "lucas_valenzuela",
+            "camila.gomez"
+          ]
         }
       ],
       "substitutes": [
@@ -69,6 +75,418 @@
         "videoDurationSeconds": 14,
         "videoSizeFormatted": "3.8 MB"
       }
+    },
+    {
+      "id": "srt_1794371966176_pk1r",
+      "userId": "guest_user",
+      "postUrl": "https://sorteoo.app",
+      "postDetails": {
+        "shortcode": "lista_participantes",
+        "author": "lista_personalizada",
+        "likes": 3,
+        "commentsCount": 3,
+        "caption": "Sorteo entre 3 participantes",
+        "sourceType": "list"
+      },
+      "status": "completed",
+      "createdAt": "2026-11-11T04:39:26.176Z",
+      "totalParticipantsDetected": 3,
+      "validParticipantsCount": 3,
+      "filtersApplied": {
+        "minMentions": 0,
+        "removeDuplicateUsers": true,
+        "requiredKeyword": "",
+        "excludedUsers": []
+      },
+      "winnersCount": 1,
+      "substitutesCount": 1,
+      "winners": [
+        {
+          "username": "Sofia Martinez",
+          "comment": "Participante"
+        }
+      ],
+      "substitutes": [
+        {
+          "username": "Lucas Valenzuela",
+          "comment": "Suplente"
+        }
+      ],
+      "audit": {
+        "seed": "123456",
+        "verificationCode": "SRT-TEST",
+        "drawnAt": "2026-11-10T20:00:00.000Z",
+        "sha256Hash": "abcdef"
+      },
+      "video": {
+        "hasVideo": true,
+        "videoFileName": "srt_1794371966176_pk1r_recording.webm",
+        "mp4FileName": "srt_1794371966176_pk1r_recording.mp4",
+        "videoDurationSeconds": 10,
+        "videoSizeFormatted": "0.00 MB",
+        "videoMimeType": "video/webm",
+        "recordedAt": "2026-11-11T04:39:45.652Z"
+      }
+    }
+  ],
+  "stories": [
+    {
+      "id": "story_mb_aura_01",
+      "username": "creator_official",
+      "mediaUrl": "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=600&auto=format&fit=crop&q=80",
+      "publishedAt": "2026-11-08T04:14:43.519Z",
+      "brandName": "Aura Indumentaria",
+      "prize": "Buzo Oversized Acid Wash + Gorra Bordada",
+      "repliesCount": 10,
+      "replies": [
+        {
+          "id": "rep_1",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_1",
+          "userId": "usr_sofia",
+          "username": "sofia_martinez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-08T05:14:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_2",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_2",
+          "userId": "usr_camila",
+          "username": "camila.gomez",
+          "text": "participo",
+          "timestamp": "2026-11-08T06:14:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_3",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_3",
+          "userId": "usr_valen",
+          "username": "valen_perez",
+          "text": "Participo!",
+          "timestamp": "2026-11-08T06:44:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_4",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_4",
+          "userId": "usr_lucas",
+          "username": "lucas_valenzuela",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-08T07:34:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_5",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_5",
+          "userId": "usr_matias",
+          "username": "matias_rodriguez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-08T08:24:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_6",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_6",
+          "userId": "usr_martina",
+          "username": "martina_alonso",
+          "text": "participo",
+          "timestamp": "2026-11-08T09:14:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_7",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_7",
+          "userId": "usr_thiago",
+          "username": "thiago_torres",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-08T10:04:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_8",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_8",
+          "userId": "usr_mora",
+          "username": "mora_fernandez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-08T10:54:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_9",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_9",
+          "userId": "usr_lautaro",
+          "username": "lautaro_sanchez",
+          "text": "participo",
+          "timestamp": "2026-11-08T11:44:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_10",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_10",
+          "userId": "usr_carolina",
+          "username": "carolina_benitez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-08T12:34:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_inv1",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_inv1",
+          "userId": "usr_random1",
+          "username": "usuario_invalido1",
+          "text": "Qué lindo buzo! Cuánto cuesta?",
+          "timestamp": "2026-11-08T05:21:23.519Z",
+          "isValidParticipo": false
+        },
+        {
+          "id": "rep_inv2",
+          "storyId": "story_mb_aura_01",
+          "messageId": "m_inv2",
+          "userId": "usr_random2",
+          "username": "usuario_invalido2",
+          "text": "Info por privado por favor",
+          "timestamp": "2026-11-08T05:54:43.519Z",
+          "isValidParticipo": false
+        }
+      ]
+    },
+    {
+      "id": "story_mb_lumiere_02",
+      "username": "creator_official",
+      "mediaUrl": "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=600&auto=format&fit=crop&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=600&auto=format&fit=crop&q=80",
+      "publishedAt": "2026-11-09T04:14:43.519Z",
+      "brandName": "Lumière Cosméticos",
+      "prize": "Kit Glow Facial: Serum Vitamina C + Crema Ácido Hialurónico",
+      "repliesCount": 7,
+      "replies": [
+        {
+          "id": "rep_11",
+          "storyId": "story_mb_lumiere_02",
+          "messageId": "m_11",
+          "userId": "usr_sofia",
+          "username": "sofia_martinez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-09T04:48:03.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_12",
+          "storyId": "story_mb_lumiere_02",
+          "messageId": "m_12",
+          "userId": "usr_camila",
+          "username": "camila.gomez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-09T05:21:23.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_13",
+          "storyId": "story_mb_lumiere_02",
+          "messageId": "m_13",
+          "userId": "usr_emilia",
+          "username": "emilia_romero",
+          "text": "participo",
+          "timestamp": "2026-11-09T05:54:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_14",
+          "storyId": "story_mb_lumiere_02",
+          "messageId": "m_14",
+          "userId": "usr_santiago",
+          "username": "santiago_vargas",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-09T06:28:03.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_15",
+          "storyId": "story_mb_lumiere_02",
+          "messageId": "m_15",
+          "userId": "usr_florencia",
+          "username": "florencia_vega",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-09T07:01:23.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_16",
+          "storyId": "story_mb_lumiere_02",
+          "messageId": "m_16",
+          "userId": "usr_lucia",
+          "username": "lucia_navarro",
+          "text": "participo",
+          "timestamp": "2026-11-09T07:34:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_17",
+          "storyId": "story_mb_lumiere_02",
+          "messageId": "m_17",
+          "userId": "usr_bruno",
+          "username": "bruno_morales",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-09T08:08:03.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_inv3",
+          "storyId": "story_mb_lumiere_02",
+          "messageId": "m_inv3",
+          "userId": "usr_random3",
+          "username": "usuario_invalido3",
+          "text": "Quiero comprar el serum",
+          "timestamp": "2026-11-09T08:41:23.519Z",
+          "isValidParticipo": false
+        }
+      ]
+    },
+    {
+      "id": "story_mb_nordic_03",
+      "username": "creator_official",
+      "mediaUrl": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=600&auto=format&fit=crop&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1524805444758-089113d48a6d?w=600&auto=format&fit=crop&q=80",
+      "publishedAt": "2026-11-10T04:14:43.519Z",
+      "brandName": "Nordic Relojes & Joyas",
+      "prize": "Reloj Black Chrono Waterproof Edición Limitada",
+      "repliesCount": 6,
+      "replies": [
+        {
+          "id": "rep_18",
+          "storyId": "story_mb_nordic_03",
+          "messageId": "m_18",
+          "userId": "usr_sofia",
+          "username": "sofia_martinez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-10T04:31:23.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_19",
+          "storyId": "story_mb_nordic_03",
+          "messageId": "m_19",
+          "userId": "usr_facundo",
+          "username": "facundo_lopez",
+          "text": "participo",
+          "timestamp": "2026-11-10T05:04:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_20",
+          "storyId": "story_mb_nordic_03",
+          "messageId": "m_20",
+          "userId": "usr_joaquin",
+          "username": "joaquin.silva",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-10T05:38:03.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_21",
+          "storyId": "story_mb_nordic_03",
+          "messageId": "m_21",
+          "userId": "usr_mateo",
+          "username": "mateo_delgado",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-10T06:11:23.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_22",
+          "storyId": "story_mb_nordic_03",
+          "messageId": "m_22",
+          "userId": "usr_delfina",
+          "username": "delfina_ortiz",
+          "text": "participo",
+          "timestamp": "2026-11-10T06:44:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_23",
+          "storyId": "story_mb_nordic_03",
+          "messageId": "m_23",
+          "userId": "usr_matias",
+          "username": "matias_rodriguez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-10T07:18:03.519Z",
+          "isValidParticipo": true
+        }
+      ]
+    },
+    {
+      "id": "story_mb_gourmet_04",
+      "username": "creator_official",
+      "mediaUrl": "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&auto=format&fit=crop&q=80",
+      "thumbnailUrl": "https://images.unsplash.com/photo-1509440159596-0249088772ff?w=600&auto=format&fit=crop&q=80",
+      "publishedAt": "2026-11-10T16:14:43.519Z",
+      "brandName": "Gourmet Bakery Café",
+      "prize": "Box Degustación Macarons + Brunch para 2 personas",
+      "repliesCount": 5,
+      "replies": [
+        {
+          "id": "rep_24",
+          "storyId": "story_mb_gourmet_04",
+          "messageId": "m_24",
+          "userId": "usr_camila",
+          "username": "camila.gomez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-10T18:14:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_25",
+          "storyId": "story_mb_gourmet_04",
+          "messageId": "m_25",
+          "userId": "usr_bautista",
+          "username": "bautista_suarez",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-10T20:14:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_26",
+          "storyId": "story_mb_gourmet_04",
+          "messageId": "m_26",
+          "userId": "usr_agustina",
+          "username": "agustina_diaz",
+          "text": "participo",
+          "timestamp": "2026-11-10T22:14:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_27",
+          "storyId": "story_mb_gourmet_04",
+          "messageId": "m_27",
+          "userId": "usr_sol",
+          "username": "sol_reyes",
+          "text": "PARTICIPO",
+          "timestamp": "2026-11-11T00:14:43.519Z",
+          "isValidParticipo": true
+        },
+        {
+          "id": "rep_28",
+          "storyId": "story_mb_gourmet_04",
+          "messageId": "m_28",
+          "userId": "usr_valen",
+          "username": "valen_perez",
+          "text": "participo",
+          "timestamp": "2026-11-11T02:14:43.519Z",
+          "isValidParticipo": true
+        }
+      ]
     }
   ]
 }

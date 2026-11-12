@@ -1819,24 +1819,24 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
 
           {/* List, Numbers, CSV: Winners and Substitutes */}
           {(activeSource === 'list' || activeSource === 'numbers' || activeSource === 'csv') && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-7 space-y-5">
-              <div className="border-b border-neutral-800 pb-3">
-                <span className="text-xs font-bold text-rose-400 uppercase tracking-wider block mb-0.5">
+            <div className="bg-white border-2 border-neutral-200/90 rounded-3xl p-5 sm:p-7 space-y-5 shadow-xl shadow-neutral-200/40">
+              <div className="border-b border-neutral-100 pb-3">
+                <span className="text-xs font-bold text-rose-500 uppercase tracking-wider block mb-0.5">
                   Paso 3
                 </span>
-                <h2 className="text-xl sm:text-2xl font-black text-white">
+                <h2 className="text-xl sm:text-2xl font-black text-neutral-900">
                   Ganadores y Suplentes
                 </h2>
               </div>
 
               {/* Winners Slider */}
-              <div className="p-4 sm:p-5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-3">
+              <div className="p-4 sm:p-5 bg-neutral-50 rounded-2xl border border-neutral-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-white">Cantidad de Ganadores</h4>
-                    <p className="text-xs text-neutral-400">Premios a sortear</p>
+                    <h4 className="text-sm font-bold text-neutral-900">Cantidad de Ganadores</h4>
+                    <p className="text-xs text-neutral-500">Premios a sortear</p>
                   </div>
-                  <div className="px-3.5 py-1 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 text-white rounded-xl text-base font-black">
+                  <div className="px-3.5 py-1 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 text-white rounded-xl text-base font-black shadow-xs">
                     {winnersCount}
                   </div>
                 </div>
@@ -1847,18 +1847,18 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                   max={Math.min(50, Math.max(1, filterResults.validParticipants.length))}
                   value={winnersCount}
                   onChange={(e) => setWinnersCount(parseInt(e.target.value, 10))}
-                  className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                  className="w-full h-2.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
                 />
               </div>
 
               {/* Substitutes Slider */}
-              <div className="p-4 sm:p-5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-3">
+              <div className="p-4 sm:p-5 bg-neutral-50 rounded-2xl border border-neutral-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-white">Cantidad de Suplentes</h4>
-                    <p className="text-xs text-neutral-400">De reserva</p>
+                    <h4 className="text-sm font-bold text-neutral-900">Cantidad de Suplentes</h4>
+                    <p className="text-xs text-neutral-500">De reserva si el ganador no responde</p>
                   </div>
-                  <div className="px-3.5 py-1 bg-neutral-800 text-neutral-200 rounded-xl text-base font-black">
+                  <div className="px-3.5 py-1 bg-white border border-neutral-200 text-neutral-800 rounded-xl text-base font-black shadow-xs">
                     {substitutesCount}
                   </div>
                 </div>
@@ -1869,15 +1869,15 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                   max={10}
                   value={substitutesCount}
                   onChange={(e) => setSubstitutesCount(parseInt(e.target.value, 10))}
-                  className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  className="w-full h-2.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+              <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
                 <button
                   type="button"
                   onClick={() => setStep(2)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Atrás</span>
@@ -1903,24 +1903,24 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
         <div>
           {/* If Username or Link: Step 4 is Winners Slider */}
           {(activeSource === 'username' || activeSource === 'link') && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-7 space-y-5">
-              <div className="border-b border-neutral-800 pb-3">
-                <span className="text-xs font-bold text-rose-400 uppercase tracking-wider block mb-0.5">
+            <div className="bg-white border-2 border-neutral-200/90 rounded-3xl p-5 sm:p-7 space-y-5 shadow-xl shadow-neutral-200/40">
+              <div className="border-b border-neutral-100 pb-3">
+                <span className="text-xs font-bold text-rose-500 uppercase tracking-wider block mb-0.5">
                   Paso 4
                 </span>
-                <h2 className="text-xl sm:text-2xl font-black text-white">
+                <h2 className="text-xl sm:text-2xl font-black text-neutral-900">
                   Ganadores y Suplentes
                 </h2>
               </div>
 
               {/* Winners Slider Only */}
-              <div className="p-4 sm:p-5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-3">
+              <div className="p-4 sm:p-5 bg-neutral-50 rounded-2xl border border-neutral-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-white">Cantidad de Ganadores</h4>
-                    <p className="text-xs text-neutral-400">Premios oficiales a sortear</p>
+                    <h4 className="text-sm font-bold text-neutral-900">Cantidad de Ganadores</h4>
+                    <p className="text-xs text-neutral-500">Premios oficiales a sortear</p>
                   </div>
-                  <div className="px-3.5 py-1 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 text-white rounded-xl text-base font-black">
+                  <div className="px-3.5 py-1 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 text-white rounded-xl text-base font-black shadow-xs">
                     {winnersCount}
                   </div>
                 </div>
@@ -1931,18 +1931,18 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                   max={Math.min(50, Math.max(1, filterResults.validParticipants.length))}
                   value={winnersCount}
                   onChange={(e) => setWinnersCount(parseInt(e.target.value, 10))}
-                  className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-rose-500"
+                  className="w-full h-2.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-rose-500"
                 />
               </div>
 
               {/* Substitutes Slider Only */}
-              <div className="p-4 sm:p-5 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-3">
+              <div className="p-4 sm:p-5 bg-neutral-50 rounded-2xl border border-neutral-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-sm font-bold text-white">Cantidad de Suplentes</h4>
-                    <p className="text-xs text-neutral-400">De reserva si el ganador no responde</p>
+                    <h4 className="text-sm font-bold text-neutral-900">Cantidad de Suplentes</h4>
+                    <p className="text-xs text-neutral-500">De reserva si el ganador no responde</p>
                   </div>
-                  <div className="px-3.5 py-1 bg-neutral-800 text-neutral-200 rounded-xl text-base font-black">
+                  <div className="px-3.5 py-1 bg-white border border-neutral-200 text-neutral-800 rounded-xl text-base font-black shadow-xs">
                     {substitutesCount}
                   </div>
                 </div>
@@ -1953,15 +1953,15 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                   max={10}
                   value={substitutesCount}
                   onChange={(e) => setSubstitutesCount(parseInt(e.target.value, 10))}
-                  className="w-full h-2.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                  className="w-full h-2.5 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-amber-500"
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+              <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
                 <button
                   type="button"
                   onClick={() => setStep(3)}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Atrás</span>
@@ -1980,58 +1980,58 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
 
           {/* If Multibrand: Step 4 is Final Confirmation & Launch */}
           {activeSource === 'multibrand' && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-7 space-y-5">
-              <div className="border-b border-neutral-800 pb-3">
-                <span className="text-xs font-bold text-rose-400 uppercase tracking-wider block mb-0.5">
+            <div className="bg-white border-2 border-neutral-200/90 rounded-3xl p-5 sm:p-7 space-y-5 shadow-xl shadow-neutral-200/40">
+              <div className="border-b border-neutral-100 pb-3">
+                <span className="text-xs font-bold text-rose-500 uppercase tracking-wider block mb-0.5">
                   Paso 4
                 </span>
-                <h2 className="text-xl sm:text-2xl font-black text-white">
+                <h2 className="text-xl sm:text-2xl font-black text-neutral-900">
                   Confirmación Sorteo Multimarcas
                 </h2>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-                  <span className="text-neutral-400 block font-medium">Marcas participantes</span>
-                  <p className="font-extrabold text-amber-400 text-base">
+                <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+                  <span className="text-neutral-500 block font-medium">Marcas participantes</span>
+                  <p className="font-extrabold text-amber-600 text-base">
                     {multibrandBrandsConfig?.length || multibrandBrands.length} emprendimientos
                   </p>
-                  <p className="text-neutral-400 text-[11px]">1 ganador asignado por cada marca</p>
+                  <p className="text-neutral-500 text-[11px]">1 ganador asignado por cada marca</p>
                 </div>
 
-                <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-                  <span className="text-neutral-400 block font-medium">Participantes Válidos</span>
-                  <p className="font-extrabold text-emerald-400 text-base">
+                <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+                  <span className="text-neutral-500 block font-medium">Participantes Válidos</span>
+                  <p className="font-extrabold text-emerald-600 text-base">
                     {filterResults.validParticipants.length} participantes
                   </p>
-                  <p className="text-neutral-400 text-[11px]">Publicación o Historias unificadas</p>
+                  <p className="text-neutral-500 text-[11px]">Publicación o Historias unificadas</p>
                 </div>
               </div>
 
               {/* Brands summary preview */}
-              <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-2">
-                <span className="text-xs font-bold text-white block">Premios a sortear:</span>
+              <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-2">
+                <span className="text-xs font-bold text-neutral-900 block">Premios a sortear:</span>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
                   {(multibrandBrandsConfig || multibrandBrands).map((b, i) => (
                     <div
                       key={b.id || i}
-                      className="p-2.5 bg-neutral-900 rounded-xl border border-neutral-800 flex items-center justify-between gap-2"
+                      className="p-2.5 bg-white rounded-xl border border-neutral-200 flex items-center justify-between gap-2 shadow-xs"
                     >
                       <div className="min-w-0">
-                        <span className="text-xs font-bold text-rose-400 block truncate">{b.brandInstagram}</span>
-                        <span className="text-[11px] text-neutral-300 block truncate">{b.prize}</span>
+                        <span className="text-xs font-bold text-rose-600 block truncate">{b.brandInstagram}</span>
+                        <span className="text-[11px] text-neutral-600 block truncate">{b.prize}</span>
                       </div>
-                      <Gift className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <Gift className="w-3.5 h-3.5 text-amber-500 shrink-0" />
                     </div>
                   ))}
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-800">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-100">
                 <button
                   type="button"
                   onClick={() => setStep(3)}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Atrás</span>
@@ -2039,7 +2039,7 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                 <button
                   type="button"
                   onClick={handleStart}
-                  className="w-full sm:w-auto min-w-[280px] sm:min-w-[340px] flex items-center justify-center gap-3 py-5 px-8 sm:px-12 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white text-base sm:text-lg font-black rounded-full shadow-2xl shadow-rose-500/40 ring-4 ring-rose-500/30 hover:ring-rose-400/60 transition-all transform hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-pulse"
+                  className="w-full sm:w-auto min-w-[280px] sm:min-w-[340px] flex items-center justify-center gap-3 py-5 px-8 sm:px-12 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white text-base sm:text-lg font-black rounded-full shadow-2xl shadow-rose-500/30 ring-4 ring-rose-500/20 hover:ring-rose-400/50 transition-all transform hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-pulse"
                 >
                   <Play className="w-6 h-6 fill-current text-white shrink-0" />
                   <span>COMENZAR SORTEOO</span>
@@ -2051,50 +2051,50 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
 
           {/* If List, Numbers, CSV: Step 4 is Final Confirmation & Launch */}
           {(activeSource === 'list' || activeSource === 'numbers' || activeSource === 'csv') && (
-            <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-7 space-y-5">
-              <div className="border-b border-neutral-800 pb-3">
-                <span className="text-xs font-bold text-rose-400 uppercase tracking-wider block mb-0.5">
+            <div className="bg-white border-2 border-neutral-200/90 rounded-3xl p-5 sm:p-7 space-y-5 shadow-xl shadow-neutral-200/40">
+              <div className="border-b border-neutral-100 pb-3">
+                <span className="text-xs font-bold text-rose-500 uppercase tracking-wider block mb-0.5">
                   Paso 4
                 </span>
-                <h2 className="text-xl sm:text-2xl font-black text-white">
+                <h2 className="text-xl sm:text-2xl font-black text-neutral-900">
                   Confirmación del Sorteo
                 </h2>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-                <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-                  <span className="text-neutral-400 block font-medium">Modalidad</span>
-                  <p className="font-bold text-white text-sm">{currentMeta.name}</p>
+                <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+                  <span className="text-neutral-500 block font-medium">Modalidad</span>
+                  <p className="font-extrabold text-neutral-900 text-sm">{currentMeta.name}</p>
                 </div>
 
-                <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-                  <span className="text-neutral-400 block font-medium">Participantes Válidos</span>
-                  <p className="font-extrabold text-emerald-400 text-base">
+                <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+                  <span className="text-neutral-500 block font-medium">Participantes Válidos</span>
+                  <p className="font-black text-emerald-600 text-base">
                     {filterResults.validParticipants.length} participantes
                   </p>
                 </div>
 
-                <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-                  <span className="text-neutral-400 block font-medium">Ganadores</span>
-                  <p className="font-bold text-amber-400 text-sm">
+                <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+                  <span className="text-neutral-500 block font-medium">Ganadores</span>
+                  <p className="font-bold text-amber-600 text-sm">
                     {winnersCount} Ganador{winnersCount > 1 ? 'es' : ''} {substitutesCount > 0 ? `+ ${substitutesCount} Suplente(s)` : ''}
                   </p>
                 </div>
 
-                <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-                  <span className="text-neutral-400 block font-medium">Grabación</span>
-                  <p className="font-bold text-rose-400 flex items-center gap-1.5 text-sm">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+                  <span className="text-neutral-500 block font-medium">Grabación</span>
+                  <p className="font-bold text-rose-600 flex items-center gap-1.5 text-sm">
+                    <ShieldCheck className="w-4 h-4 text-emerald-500" />
                     <span>Video 9:16 oficial</span>
                   </p>
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-800">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-100">
                 <button
                   type="button"
                   onClick={() => setStep(3)}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer"
+                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>Atrás</span>
@@ -2102,7 +2102,7 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                 <button
                   type="button"
                   onClick={handleStart}
-                  className="w-full sm:w-auto min-w-[280px] sm:min-w-[340px] flex items-center justify-center gap-3 py-5 px-8 sm:px-12 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white text-base sm:text-lg font-black rounded-full shadow-2xl shadow-rose-500/40 ring-4 ring-rose-500/30 hover:ring-rose-400/60 transition-all transform hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-pulse"
+                  className="w-full sm:w-auto min-w-[280px] sm:min-w-[340px] flex items-center justify-center gap-3 py-5 px-8 sm:px-12 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white text-base sm:text-lg font-black rounded-full shadow-2xl shadow-rose-500/30 ring-4 ring-rose-500/20 hover:ring-rose-400/50 transition-all transform hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-pulse"
                 >
                   <Play className="w-6 h-6 fill-current text-white shrink-0" />
                   <span>COMENZAR SORTEOO</span>
@@ -2118,53 +2118,53 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
       {/* STEP 5: FINAL CONFIRMATION (FOR USERNAME & LINK)     */}
       {/* ==================================================== */}
       {step === 5 && (activeSource === 'username' || activeSource === 'link') && (
-        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-7 space-y-5">
-          <div className="border-b border-neutral-800 pb-3">
-            <span className="text-xs font-bold text-rose-400 uppercase tracking-wider block mb-0.5">
+        <div className="bg-white border-2 border-neutral-200/90 rounded-3xl p-5 sm:p-7 space-y-5 shadow-xl shadow-neutral-200/40">
+          <div className="border-b border-neutral-100 pb-3">
+            <span className="text-xs font-bold text-rose-500 uppercase tracking-wider block mb-0.5">
               Paso 5
             </span>
-            <h2 className="text-xl sm:text-2xl font-black text-white">
+            <h2 className="text-xl sm:text-2xl font-black text-neutral-900">
               Confirmación del Sorteo
             </h2>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-            <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-              <span className="text-neutral-400 block font-medium">Publicación</span>
-              <p className="font-bold text-white truncate text-sm">
+            <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+              <span className="text-neutral-500 block font-medium">Publicación</span>
+              <p className="font-extrabold text-neutral-900 truncate text-sm">
                 @{postDetails?.author || 'instagram_user'}
               </p>
-              <p className="text-neutral-400 text-[11px] truncate">{postDetails?.caption}</p>
+              <p className="text-neutral-500 text-[11px] truncate">{postDetails?.caption}</p>
             </div>
 
-            <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-              <span className="text-neutral-400 block font-medium">Participantes Válidos</span>
-              <p className="font-extrabold text-emerald-400 text-base">
+            <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+              <span className="text-neutral-500 block font-medium">Participantes Válidos</span>
+              <p className="font-black text-emerald-600 text-base">
                 {filterResults.validParticipants.length} comentarios
               </p>
             </div>
 
-            <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-              <span className="text-neutral-400 block font-medium">Ganadores</span>
-              <p className="font-bold text-amber-400 text-sm">
+            <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+              <span className="text-neutral-500 block font-medium">Ganadores</span>
+              <p className="font-bold text-amber-600 text-sm">
                 {winnersCount} Ganador{winnersCount > 1 ? 'es' : ''} {substitutesCount > 0 ? `+ ${substitutesCount} Suplente(s)` : ''}
               </p>
             </div>
 
-            <div className="bg-neutral-950 p-3.5 rounded-2xl border border-neutral-800 space-y-1">
-              <span className="text-neutral-400 block font-medium">Verificador & Video</span>
-              <p className="font-bold text-rose-400 flex items-center gap-1.5 text-sm">
-                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            <div className="bg-neutral-50 p-3.5 rounded-2xl border border-neutral-200 space-y-1">
+              <span className="text-neutral-500 block font-medium">Verificador & Video</span>
+              <p className="font-bold text-rose-600 flex items-center gap-1.5 text-sm">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
                 <span>Video 9:16 oficial</span>
               </p>
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-800">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-100">
             <button
               type="button"
               onClick={() => setStep(4)}
-              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer"
+              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Atrás</span>
@@ -2172,7 +2172,7 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
             <button
               type="button"
               onClick={handleStart}
-              className="w-full sm:w-auto min-w-[280px] sm:min-w-[340px] flex items-center justify-center gap-3 py-5 px-8 sm:px-12 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white text-base sm:text-lg font-black rounded-full shadow-2xl shadow-rose-500/40 ring-4 ring-rose-500/30 hover:ring-rose-400/60 transition-all transform hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-pulse"
+              className="w-full sm:w-auto min-w-[280px] sm:min-w-[340px] flex items-center justify-center gap-3 py-5 px-8 sm:px-12 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white text-base sm:text-lg font-black rounded-full shadow-2xl shadow-rose-500/30 ring-4 ring-rose-500/20 hover:ring-rose-400/50 transition-all transform hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-pulse"
             >
               <Play className="w-6 h-6 fill-current text-white shrink-0" />
               <span>COMENZAR SORTEOO</span>

@@ -83,12 +83,19 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
     // 0. Preload Cute Mascot Logo
     loadAndCacheImage('app_mascot', '/assets/aistudio/Regalo_sonriente_con_lazo_y_destellos_f63477b8.png');
 
+    const isNonInstagram =
+      postDetails.sourceType === 'list' ||
+      postDetails.sourceType === 'numbers' ||
+      postDetails.sourceType === 'csv' ||
+      postDetails.author === 'lista_personalizada' ||
+      postDetails.author === 'sorteo_por_numeros';
+
     // 1. Preload Organizer Logo (Custom logo, or host avatar, or user-avatar endpoint)
     if (postDetails.customLogoUrl) {
       loadAndCacheImage('host_logo', postDetails.customLogoUrl);
     } else if (postDetails.authorAvatarUrl) {
       loadAndCacheImage('host_logo', postDetails.authorAvatarUrl);
-    } else if (postDetails.author && !postDetails.author.startsWith('sorteo_')) {
+    } else if (!isNonInstagram && postDetails.author && !postDetails.author.startsWith('sorteo_')) {
       loadAndCacheImage('host_logo', `/api/instagram/user-avatar?username=${encodeURIComponent(postDetails.author)}`);
     }
 
@@ -97,7 +104,7 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
       const cleanUser = (w.username || '').replace(/^@/, '');
       if (w.avatarUrl && (w.avatarUrl.startsWith('http') || w.avatarUrl.startsWith('/api'))) {
         loadAndCacheImage(`avatar_${cleanUser.toLowerCase()}`, w.avatarUrl);
-      } else if (cleanUser && !cleanUser.startsWith('#') && !cleanUser.startsWith('Número')) {
+      } else if (!isNonInstagram && cleanUser && !cleanUser.includes(' ') && !cleanUser.startsWith('#') && !cleanUser.startsWith('Número')) {
         loadAndCacheImage(`avatar_${cleanUser.toLowerCase()}`, `/api/instagram/user-avatar?username=${encodeURIComponent(cleanUser)}`);
       }
     });
@@ -120,7 +127,6 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Supported mimeType for video recording
     // Supported mimeType for video recording (prioritizing MP4 for native Safari/iOS compatibility)
     const mimeTypes = [
       'video/mp4;codecs=avc1',
@@ -141,7 +147,7 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
     let recorder: MediaRecorder | null = null;
     try {
       if (typeof canvas.captureStream === 'function' && typeof MediaRecorder !== 'undefined') {
-        const stream = canvas.captureStream(60); // 60 FPS
+        const stream = canvas.captureStream(30); // 30 FPS for smooth, efficient rendering
         recorder = new MediaRecorder(stream, selectedMimeType ? { mimeType: selectedMimeType } : undefined);
         recorderRef.current = recorder;
         chunksRef.current = [];
@@ -857,18 +863,14 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
                 type: selectedMimeType || 'video/webm',
               });
 
-              const reader = new FileReader();
-              reader.readAsDataURL(videoBlob);
-              reader.onloadend = () => {
-                const dataUrl = reader.result as string;
-                onFinish({
-                  videoBlob,
-                  videoDataUrl: dataUrl,
-                  durationSeconds: Math.round(elapsed / 1000),
-                  mimeType: selectedMimeType || 'video/webm',
-                  recordingError: recordingError || undefined,
-                });
-              };
+              const objectUrl = URL.createObjectURL(videoBlob);
+              onFinish({
+                videoBlob,
+                videoDataUrl: objectUrl,
+                durationSeconds: Math.round(elapsed / 1000),
+                mimeType: selectedMimeType || 'video/webm',
+                recordingError: recordingError || undefined,
+              });
             };
             recorder.stop();
           } else {

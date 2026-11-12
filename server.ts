@@ -613,6 +613,20 @@ app.get('/api/instagram/user-avatar', async (req, res) => {
     return res.send(generateAvatarSvg('?'));
   }
 
+  // Fast exit for list names (spaces), numbers, or custom non-Instagram labels
+  if (
+    username.includes(' ') ||
+    username.startsWith('sorteo_') ||
+    username.startsWith('lista_') ||
+    username.startsWith('Número') ||
+    username.startsWith('#') ||
+    username.length > 30 ||
+    /[!$%^&*()+=[\]{};':"\\|,<>/?]/.test(username)
+  ) {
+    res.setHeader('Content-Type', 'image/svg+xml');
+    return res.send(generateAvatarSvg(username));
+  }
+
   // Check cache
   const cacheKey = `avatar_${username.toLowerCase()}`;
   const cached = imageCache.get(cacheKey);
@@ -772,10 +786,29 @@ app.post('/api/instagram/profile-feed', async (req, res) => {
     },
   ];
 
-  // 1. PRIMARY: FETCH VIA SOCIAL DATA API
+  // 1. PRIMARY: DIRECT FETCH OF REAL POSTS & USER PROFILE VIA SOCIALDATA API (SINGLE CALL)
   try {
-    const infoData = await fetchSocialData('/v1/info', { username_or_id_or_url: cleanUser }, 6000);
-    const userData = infoData?.data;
+    const postsParams: Record<string, string> = { username_or_id_or_url: cleanUser };
+    if (paginationToken && typeof paginationToken === 'string') {
+      postsParams.pagination_token = paginationToken;
+    }
+
+    // Call /v1/posts with 20-second timeout so newly crawled profiles never time out
+    const postsResponse = await fetchSocialData('/v1/posts', postsParams, 20000);
+    const items = postsResponse?.data?.items || postsResponse?.data || [];
+    const postsPaginationToken = postsResponse?.pagination_token || null;
+
+    // Extract user profile from posts response or fallback to info call
+    let userData = postsResponse?.data?.user || (items.length > 0 ? items[0].user : null);
+
+    if (!userData) {
+      try {
+        const infoData = await fetchSocialData('/v1/info', { username_or_id_or_url: cleanUser }, 15000);
+        userData = infoData?.data;
+      } catch (iErr) {
+        // ignore
+      }
+    }
 
     if (userData) {
       const profileAvatar = userData.profile_pic_url_hd || userData.profile_pic_url;
@@ -802,82 +835,67 @@ app.post('/api/instagram/profile-feed', async (req, res) => {
         });
       }
 
-      // Public Account: Fetch real recent wall posts
+      // Map 100% REAL posts from Instagram
       let realPosts: any[] = [];
-      let postsPaginationToken: string | null = null;
-      try {
-        const postsParams: Record<string, string> = { username_or_id_or_url: cleanUser };
-        if (paginationToken && typeof paginationToken === 'string') {
-          postsParams.pagination_token = paginationToken;
-        }
-        const postsResponse = await fetchSocialData('/v1/posts', postsParams, 6000);
-        const items = postsResponse?.data?.items || postsResponse?.data || [];
-        postsPaginationToken = postsResponse?.pagination_token || null;
+      if (Array.isArray(items) && items.length > 0) {
+        realPosts = items.map((item: any, idx: number) => {
+          const caption = item.caption?.text || '';
+          const commentsCount = item.comment_count ?? 0;
+          const likes = item.like_count ?? 0;
+          const candidateUrl =
+            item.thumbnail_url ||
+            item.image_versions?.items?.[0]?.url ||
+            item.image_versions?.additional_items?.first_frame?.url ||
+            item.image_versions?.candidates?.[0]?.url ||
+            item.image_versions2?.candidates?.[0]?.url ||
+            item.display_url ||
+            '';
+          const timestamp = item.taken_at_timestamp
+            ? new Date(item.taken_at_timestamp * 1000)
+            : item.taken_at
+            ? new Date(item.taken_at * 1000)
+            : new Date();
 
-        if (Array.isArray(items) && items.length > 0) {
-          realPosts = items.map((item: any, idx: number) => {
-            const caption = item.caption?.text || '';
-            const commentsCount = item.comment_count ?? 0;
-            const likes = item.like_count ?? 0;
-            const candidateUrl =
-              item.thumbnail_url ||
-              item.image_versions?.items?.[0]?.url ||
-              item.image_versions?.additional_items?.first_frame?.url ||
-              item.image_versions?.candidates?.[0]?.url ||
-              item.image_versions2?.candidates?.[0]?.url ||
-              item.display_url ||
-              '';
-            const timestamp = item.taken_at_timestamp
-              ? new Date(item.taken_at_timestamp * 1000)
-              : item.device_timestamp
-              ? new Date(item.device_timestamp / 1000)
-              : new Date();
-
-            return {
-              shortcode: item.code || `post_${idx}`,
-              postUrl: `https://www.instagram.com/p/${item.code}/`,
-              caption: caption || `Publicación de @${cleanUser}`,
-              imageUrl: candidateUrl ? `/api/instagram/image-proxy?url=${encodeURIComponent(candidateUrl)}` : '',
-              likes,
-              commentsCount,
-              date: timestamp.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
-              isVideo: Boolean(item.is_video),
-              isGiveaway: /sorteo|giveaway|premio|ganador|participa|concurso|participá/i.test(caption),
-            };
-          });
-        }
-      } catch (postsErr: any) {
-        console.warn(`Posts fetch failed for @${cleanUser}:`, postsErr.message);
+          return {
+            shortcode: item.code || `post_${idx}`,
+            postUrl: item.code ? `https://www.instagram.com/p/${item.code}/` : `https://www.instagram.com/${cleanUser}/`,
+            caption: caption || `Publicación de @${cleanUser}`,
+            imageUrl: candidateUrl ? `/api/instagram/image-proxy?url=${encodeURIComponent(candidateUrl)}` : '',
+            likes,
+            commentsCount,
+            date: timestamp.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }),
+            isVideo: Boolean(item.is_video),
+            isGiveaway: /sorteo|giveaway|premio|ganador|participa|concurso|participá/i.test(caption),
+          };
+        });
       }
 
-      const finalPosts = realPosts.length > 0 ? realPosts : buildFallbackPosts(cleanUser);
-
-      const profile = {
-        username: userData.username || cleanUser,
-        name: userData.full_name || userData.username || cleanUser,
-        avatar: profileAvatar
-          ? `/api/instagram/image-proxy?url=${encodeURIComponent(profileAvatar)}`
-          : `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUser}`,
-        bio: userData.biography || `Cuenta oficial de @${cleanUser} en Instagram`,
-        followersCount: userData.follower_count || 12000,
-        postsCount: userData.media_count || finalPosts.length,
-        isPrivate: false,
-        posts: finalPosts,
-        paginationToken: postsPaginationToken,
-      };
-
-      return res.json({
-        success: true,
-        isRealLive: realPosts.length > 0,
-        isPrivate: false,
-        profile,
-      });
+      if (realPosts.length > 0) {
+        return res.json({
+          success: true,
+          isRealLive: true,
+          isPrivate: false,
+          profile: {
+            username: userData.username || cleanUser,
+            name: userData.full_name || userData.username || cleanUser,
+            avatar: profileAvatar
+              ? `/api/instagram/image-proxy?url=${encodeURIComponent(profileAvatar)}`
+              : `https://api.dicebear.com/7.x/bottts/svg?seed=${cleanUser}`,
+            bio: userData.biography || `Cuenta oficial de @${cleanUser} en Instagram`,
+            followersCount: userData.follower_count || userData.followers_count || 12000,
+            postsCount: userData.media_count || realPosts.length,
+            isPrivate: false,
+            posts: realPosts,
+            paginationToken: postsPaginationToken,
+          },
+        });
+      }
     }
   } catch (apiErr: any) {
-    console.warn(`SocialData API failed/timed out for @${cleanUser}:`, apiErr.message);
+    console.warn(`SocialData posts fetch failed for @${cleanUser}:`, apiErr.message);
   }
 
-  // 2. RESILIENT FALLBACK: Never block user with empty screen or 404
+  // 2. RESILIENT FALLBACK: If public live query fails or is throttled by Meta
   const fallbackPosts = buildFallbackPosts(cleanUser);
   return res.json({
     success: true,
@@ -996,79 +1014,72 @@ app.post('/api/instagram/parse', async (req, res) => {
   // C. PRIMARY: FETCH 100% REAL COMMENTS AND POST INFO VIA SOCIALDATA API
   else if (shortcode && shortcode !== 'post_selected') {
     try {
-      // 1. Get real post info (author, real thumbnail, caption, likes, comments count)
-      try {
-        const postInfoRes = await fetchSocialData('/v1/post_info', { code_or_id_or_url: shortcode });
-        const postData = postInfoRes?.data;
-        if (postData) {
-          if (postData.user?.username) author = postData.user.username;
-          if (postData.caption?.text) caption = postData.caption.text;
-          if (postData.metrics?.like_count !== undefined) likes = postData.metrics.like_count;
-          else if (postData.like_count !== undefined) likes = postData.like_count;
-
-          // Accurately capture total comments recorded on Instagram
-          if (postData.metrics?.comment_count !== undefined) {
-            totalCommentsInPost = postData.metrics.comment_count;
-          } else if (postData.comment_count !== undefined) {
-            totalCommentsInPost = postData.comment_count;
-          } else if (postData.comments_count !== undefined) {
-            totalCommentsInPost = postData.comments_count;
-          }
-
-          const candidate =
-            postData.thumbnail_url ||
-            postData.image_versions?.items?.[0]?.url ||
-            postData.image_versions?.additional_items?.first_frame?.url ||
-            postData.image_versions?.candidates?.[0]?.url ||
-            postData.image_versions2?.candidates?.[0]?.url ||
-            postData.display_url ||
-            '';
-          if (candidate) {
-            imageUrl = `/api/instagram/image-proxy?url=${encodeURIComponent(candidate)}`;
-          }
-        }
-      } catch (infoErr: any) {
-        console.warn(`Post info fetch note for ${shortcode}:`, infoErr.message);
-      }
-
-      // If requested from client post selection modal and not yet resolved, use client count
-      if (!totalCommentsInPost && reqCommentsCount && Number(reqCommentsCount) > 0) {
+      if (reqCommentsCount && Number(reqCommentsCount) > 0) {
         totalCommentsInPost = Number(reqCommentsCount);
       }
 
-      // 2. Fetch real comments with pagination (fetches all comments, up to 150 pages / 5000+ comments)
-      let nextToken: string | null = null;
-      let page = 1;
-      const MAX_PAGES = 150; // Allows retrieving complete comment lists for giveaways up to 5,000+ comments
-      const threadParentIds: Array<{ id: string; count: number }> = [];
-      const seenCommentIds = new Set<string>();
+      // Concurrently fetch post info (if needed) and initial comments page
+      const fetchInfoPromise = (!customAuthor || !customCaption)
+        ? fetchSocialData('/v1/post_info', { code_or_id_or_url: shortcode }, 7000).catch((e) => {
+            console.warn(`Post info note for ${shortcode}:`, e.message);
+            return null;
+          })
+        : Promise.resolve(null);
 
-      do {
-        const params: Record<string, string> = { code_or_id_or_url: shortcode };
-        if (nextToken) {
-          params.pagination_token = nextToken;
+      const initialCommentsPromise = fetchSocialData('/v1/comments', { code_or_id_or_url: shortcode }, 7000).catch((e) => {
+        console.warn(`Initial comments note for ${shortcode}:`, e.message);
+        return null;
+      });
+
+      const [postInfoRes, firstCommentsRes] = await Promise.all([fetchInfoPromise, initialCommentsPromise]);
+
+      if (postInfoRes?.data) {
+        const postData = postInfoRes.data;
+        if (postData.user?.username) author = postData.user.username;
+        if (postData.caption?.text) caption = postData.caption.text;
+        if (postData.metrics?.like_count !== undefined) likes = postData.metrics.like_count;
+        else if (postData.like_count !== undefined) likes = postData.like_count;
+
+        if (postData.metrics?.comment_count !== undefined) {
+          totalCommentsInPost = postData.metrics.comment_count;
+        } else if (postData.comment_count !== undefined) {
+          totalCommentsInPost = postData.comment_count;
         }
 
-        let commentsRes: any = null;
-        for (let attempt = 0; attempt < 2; attempt++) {
+        const candidate =
+          postData.thumbnail_url ||
+          postData.image_versions?.items?.[0]?.url ||
+          postData.image_versions?.additional_items?.first_frame?.url ||
+          postData.image_versions?.candidates?.[0]?.url ||
+          postData.display_url ||
+          '';
+        if (candidate) {
+          imageUrl = `/api/instagram/image-proxy?url=${encodeURIComponent(candidate)}`;
+        }
+      }
+
+      // 2. Process real comments with pagination (fast & resilient up to 15 pages)
+      let nextToken: string | null = null;
+      let page = 1;
+      const MAX_PAGES = 15;
+      const seenCommentIds = new Set<string>();
+
+      let currentCommentsRes = firstCommentsRes;
+      do {
+        if (page > 1) {
+          const params: Record<string, string> = { code_or_id_or_url: shortcode };
+          if (nextToken) params.pagination_token = nextToken;
           try {
-            commentsRes = await fetchSocialData('/v1/comments', params, 30000);
-            break;
+            currentCommentsRes = await fetchSocialData('/v1/comments', params, 5000);
           } catch (pageErr: any) {
-            if (attempt === 1) {
-              console.log(`Pagination finished at page ${page} for ${shortcode} (${participants.length} comments gathered)`);
-              break;
-            }
-            // Wait 600ms before retry
-            await new Promise((r) => setTimeout(r, 600));
+            console.log(`Comments page ${page} limit reached for ${shortcode}`);
+            break;
           }
         }
 
-        if (!commentsRes) {
-          break;
-        }
+        if (!currentCommentsRes) break;
 
-        const items = commentsRes?.data?.items || commentsRes?.data || [];
+        const items = currentCommentsRes?.data?.items || currentCommentsRes?.data || [];
 
         if (Array.isArray(items) && items.length > 0) {
           for (const item of items) {
@@ -1100,74 +1111,14 @@ app.post('/api/instagram/parse', async (req, res) => {
               timestamp,
               mentions,
             });
-
-            // If comment has replies in a thread, queue parent id for thread fetch
-            if (item.child_comment_count > 0 && item.id) {
-              threadParentIds.push({ id: item.id, count: item.child_comment_count });
-            }
           }
         }
 
-        nextToken = commentsRes?.pagination_token || null;
+        nextToken = currentCommentsRes?.pagination_token || null;
         page++;
-      } while (nextToken && participants.length < 5000 && page <= MAX_PAGES);
-
-      // 3. Fetch reply threads for comments with replies in concurrent batches
-      if (threadParentIds.length > 0) {
-        const CHUNK_SIZE = 5;
-        for (let i = 0; i < threadParentIds.length; i += CHUNK_SIZE) {
-          const chunk = threadParentIds.slice(i, i + CHUNK_SIZE);
-          await Promise.all(
-            chunk.map(async (parent) => {
-              try {
-                const threadRes = await fetchSocialData('/v1/comments_thread', {
-                  code_or_id_or_url: shortcode,
-                  comment_id: parent.id,
-                });
-                const childItems = threadRes?.data?.child_comments || threadRes?.data?.items || threadRes?.data || [];
-                if (Array.isArray(childItems)) {
-                  for (const child of childItems) {
-                    if (child.id) {
-                      if (seenCommentIds.has(child.id)) continue;
-                      seenCommentIds.add(child.id);
-                    }
-
-                    const rawChildUser = child.user?.username || '';
-                    const cleanChildUser = rawChildUser.trim().replace(/^@/, '');
-                    if (!cleanChildUser) continue;
-
-                    const childText = child.text || child.comment || '';
-                    const childMentionMatches = childText.match(/@([a-zA-Z0-9._]+)/g) || [];
-                    const childMentions = childMentionMatches
-                      .map((m: string) => m.replace(/^@/, ''))
-                      .filter((m: string) => m !== cleanChildUser);
-
-                    const childAvatar = child.user?.profile_pic_url
-                      ? `/api/instagram/image-proxy?url=${encodeURIComponent(child.user.profile_pic_url)}`
-                      : `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(cleanChildUser)}`;
-
-                    const childTimestamp = child.created_at
-                      ? new Date(child.created_at * 1000).toISOString()
-                      : new Date().toISOString();
-
-                    participants.push({
-                      username: cleanChildUser,
-                      comment: childText,
-                      avatarUrl: childAvatar,
-                      timestamp: childTimestamp,
-                      mentions: childMentions,
-                    });
-                  }
-                }
-              } catch (tErr: any) {
-                // Silently skip unretrievable thread
-              }
-            })
-          );
-        }
-      }
+      } while (nextToken && participants.length < 1500 && page <= MAX_PAGES);
     } catch (commentsErr: any) {
-      console.warn(`SocialData comments fetch failed for ${shortcode}:`, commentsErr.message);
+      console.warn(`SocialData comments fetch note for ${shortcode}:`, commentsErr.message);
     }
   }
 
@@ -1351,8 +1302,83 @@ app.post('/api/giveaways', (req: any, res) => {
     return res.status(500).json({ error: err.message || 'Error al guardar sorteo' });
   }
 });
+// Helper for 100% Apple QuickTime macOS, iPhone iOS Photos, WhatsApp, and Instagram compatible MP4
+const convertToUniversalMp4 = async (src: string, dst: string): Promise<boolean> => {
+  try {
+    await execAsync(
+      `ffmpeg -y -i "${src}" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -map 0:v:0 -map 1:a:0 -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -r 30 -c:a aac -b:a 128k -ar 44100 -shortest -movflags +faststart "${dst}"`
+    );
+    return fs.existsSync(dst) && fs.statSync(dst).size > 1000;
+  } catch (err: any) {
+    try {
+      await execAsync(
+        `ffmpeg -y -i "${src}" -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -r 30 -movflags +faststart "${dst}"`
+      );
+      return fs.existsSync(dst) && fs.statSync(dst).size > 1000;
+    } catch (err2: any) {
+      console.warn('ffmpeg conversion warning:', err2.message);
+      return false;
+    }
+  }
+};
 
-// Upload video for giveaway (base64 or binary data)
+// Binary raw video upload (lightning fast direct streaming without Base64 memory overhead)
+app.post('/api/giveaways/:id/video-binary', express.raw({ type: '*/*', limit: '100mb' }), async (req: any, res) => {
+  try {
+    const buffer: Buffer = req.body;
+    if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 200) {
+      return res.status(400).json({ error: 'Archivo de video inválido o vacío' });
+    }
+
+    const mimeType = (req.query.mimeType as string) || 'video/webm';
+    const durationSeconds = Number(req.query.durationSeconds) || 12;
+
+    const db = loadDB();
+    const giveaway = db.giveaways.find((g) => g.id === req.params.id);
+    if (!giveaway) {
+      return res.status(404).json({ error: 'Sorteo no encontrado' });
+    }
+
+    const ext = mimeType.includes('mp4') ? 'mp4' : 'webm';
+    const filename = `${giveaway.id}_recording.${ext}`;
+    const filePath = path.join(VIDEOS_DIR, filename);
+
+    fs.writeFileSync(filePath, buffer);
+
+    const sizeBytes = buffer.length;
+    const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2) + ' MB';
+    const mp4Filename = `${giveaway.id}_recording.mp4`;
+    const mp4FilePath = path.join(VIDEOS_DIR, mp4Filename);
+
+    giveaway.video = {
+      hasVideo: true,
+      videoFileName: filename,
+      mp4FileName: mp4Filename,
+      videoDurationSeconds: durationSeconds,
+      videoSizeFormatted: sizeMB,
+      videoMimeType: mimeType,
+      recordedAt: new Date().toISOString(),
+    };
+    saveDB(db);
+
+    if (ext !== 'mp4' && buffer.length >= 1000) {
+      convertToUniversalMp4(filePath, mp4FilePath).then((ok) => {
+        if (ok) console.log(`Universal MP4 created from binary upload: ${mp4Filename}`);
+      });
+    }
+
+    return res.json({
+      message: 'Video binario guardado correctamente',
+      video: giveaway.video,
+      videoUrl: `/api/giveaways/${giveaway.id}/video-stream`,
+      mp4Url: `/api/giveaways/${giveaway.id}/download-video`,
+    });
+  } catch (err: any) {
+    console.error('Error in video-binary upload:', err);
+    return res.status(500).json({ error: 'Error al procesar el archivo de video binario' });
+  }
+});
+
 app.post('/api/giveaways/:id/video', (req: any, res) => {
   try {
     const { videoBase64, mimeType, durationSeconds } = req.body;
@@ -1371,7 +1397,7 @@ app.post('/api/giveaways/:id/video', (req: any, res) => {
     const filename = `${giveaway.id}_recording.${ext}`;
     const filePath = path.join(VIDEOS_DIR, filename);
 
-    // Strip data URI prefix cleanly (handles video/webm;codecs=vp9, video/webm;codecs=vp8, video/mp4, etc.)
+    // Strip data URI prefix cleanly
     const commaIndex = videoBase64.indexOf(',');
     const base64Data = commaIndex !== -1 ? videoBase64.substring(commaIndex + 1) : videoBase64;
     const buffer = Buffer.from(base64Data, 'base64');
@@ -1384,8 +1410,6 @@ app.post('/api/giveaways/:id/video', (req: any, res) => {
 
     const sizeBytes = buffer.length;
     const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(2) + ' MB';
-
-    // If file is webm, trigger ffmpeg conversion to universal mp4
     const mp4Filename = `${giveaway.id}_recording.mp4`;
     const mp4FilePath = path.join(VIDEOS_DIR, mp4Filename);
 
@@ -1400,26 +1424,6 @@ app.post('/api/giveaways/:id/video', (req: any, res) => {
     };
 
     saveDB(db);
-
-    // Helper for 100% Apple QuickTime macOS, iPhone iOS Photos, WhatsApp, and Instagram compatible MP4
-    const convertToUniversalMp4 = async (src: string, dst: string) => {
-      try {
-        await execAsync(
-          `ffmpeg -y -i "${src}" -f lavfi -i anullsrc=channel_layout=stereo:sample_rate=44100 -map 0:v:0 -map 1:a:0 -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -r 30 -c:a aac -b:a 128k -ar 44100 -shortest -movflags +faststart "${dst}"`
-        );
-        return fs.existsSync(dst) && fs.statSync(dst).size > 1000;
-      } catch (err: any) {
-        try {
-          await execAsync(
-            `ffmpeg -y -i "${src}" -vf "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p" -c:v libx264 -profile:v baseline -level 3.1 -pix_fmt yuv420p -preset fast -crf 22 -r 30 -movflags +faststart "${dst}"`
-          );
-          return fs.existsSync(dst) && fs.statSync(dst).size > 1000;
-        } catch (err2: any) {
-          console.warn('ffmpeg conversion warning:', err2.message);
-          return false;
-        }
-      }
-    };
 
     // Asynchronous ffmpeg conversion to universal H.264 MP4 if original is WebM and valid
     if (ext !== 'mp4' && buffer.length >= 1000) {

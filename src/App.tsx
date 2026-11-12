@@ -110,9 +110,15 @@ function MainApp() {
   }) => {
     if (!activeDrawConfig) return;
 
+    const localVideoUrl = result.videoBlob
+      ? URL.createObjectURL(result.videoBlob)
+      : result.videoDataUrl || null;
+
     setRecordedVideoBlob(result.videoBlob);
-    setRecordedVideoDataUrl(result.videoDataUrl);
+    setRecordedVideoDataUrl(localVideoUrl);
     setRecordingError(result.recordingError);
+
+    let savedGiveaway: Giveaway;
 
     try {
       // 1. Save giveaway to server database
@@ -136,29 +142,11 @@ function MainApp() {
         multibrandMeta: (activeDrawConfig.postDetails as any)?.multibrandMeta,
       });
 
-      const savedGiveaway = createRes.giveaway;
-
-      // 2. Upload video file to server if available
-      if (result.videoDataUrl) {
-        try {
-          await api.uploadGiveawayVideo(
-            savedGiveaway.id,
-            result.videoDataUrl,
-            result.mimeType,
-            result.durationSeconds
-          );
-          savedGiveaway.video.hasVideo = true;
-        } catch (vErr) {
-          console.warn('Video upload error:', vErr);
-        }
-      }
-
-      setCompletedGiveaway(savedGiveaway);
-      setCurrentTab('results');
+      savedGiveaway = createRes.giveaway;
     } catch (err: any) {
-      console.error('Error saving giveaway to server:', err);
+      console.warn('Error saving giveaway to server, using local certificate:', err);
       // Fallback local display
-      setCompletedGiveaway({
+      savedGiveaway = {
         id: `srt_${Date.now()}`,
         userId: user?.id || 'usr_local',
         postUrl: activeDrawConfig.postUrl,
@@ -175,9 +163,35 @@ function MainApp() {
         audit: activeDrawConfig.audit,
         video: {
           hasVideo: Boolean(result.videoBlob),
+          videoDurationSeconds: result.durationSeconds,
+          videoMimeType: result.mimeType,
+          recordedAt: new Date().toISOString(),
         },
+      };
+    }
+
+    // 2. CRITICAL: Switch to results tab IMMEDIATELY! Never keep user waiting!
+    setCompletedGiveaway(savedGiveaway);
+    setCurrentTab('results');
+
+    // 3. Upload video file to server in the background without holding up the user interface
+    if (result.videoBlob && savedGiveaway.id) {
+      api.uploadGiveawayVideoBinary(
+        savedGiveaway.id,
+        result.videoBlob,
+        result.mimeType,
+        result.durationSeconds
+      ).catch((binErr) => {
+        console.warn('Binary video upload note:', binErr);
+        if (result.videoDataUrl && result.videoDataUrl.startsWith('data:')) {
+          api.uploadGiveawayVideo(
+            savedGiveaway.id,
+            result.videoDataUrl,
+            result.mimeType,
+            result.durationSeconds
+          ).catch((vErr) => console.warn('Base64 upload note:', vErr));
+        }
       });
-      setCurrentTab('results');
     }
   };
 
