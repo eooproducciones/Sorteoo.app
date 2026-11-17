@@ -11,10 +11,10 @@ import {
 import { api } from '../services/api';
 import { filterParticipants } from '../utils/giveawayLogic';
 import { MultibrandSection } from './MultibrandSection';
+import { CheckoutPaymentBox, PendingDrawPayload } from './CheckoutPaymentBox';
 import {
   AtSign,
   Link as LinkIcon,
-  Play,
   Grid,
   Heart,
   MessageCircle,
@@ -40,6 +40,7 @@ import {
   Gift,
   Camera,
   Image as ImageIcon,
+  Lock,
 } from 'lucide-react';
 
 interface CreateGiveawayWizardProps {
@@ -124,6 +125,11 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
 
   // Shared parsing states
   const [loadingComments, setLoadingComments] = useState(false);
+  const [commentsProgress, setCommentsProgress] = useState<{
+    percent: number;
+    loadedCount: number;
+    totalEstimated: number;
+  }>({ percent: 0, loadedCount: 0, totalEstimated: 0 });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [postDetails, setPostDetails] = useState<PostDetails | null>(null);
   const [rawParticipants, setRawParticipants] = useState<Participant[]>([]);
@@ -234,11 +240,8 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
       return;
     }
 
-    // If user pasted a post link directly into the username box
     if (raw.includes('instagram.com/p/') || raw.includes('instagram.com/reel/') || raw.includes('instagram.com/tv/')) {
-      const fullUrl = raw.startsWith('http') ? raw : `https://${raw}`;
-      setDirectUrl(fullUrl);
-      handleConfirmDirectLink();
+      setErrorMsg('Ingresa un nombre de usuario de Instagram. Para usar un enlace directo, elige "Sorteo por enlace" en el Paso 1.');
       return;
     }
 
@@ -256,15 +259,22 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
     }
 
     setErrorMsg(null);
+    setSelectedPost(null);
     setLoadingProfile(true);
     try {
       const data = await api.getInstagramProfileFeed(userClean);
       setProfileData(data.profile);
       setVisiblePostsCount(6);
-      if (data.profile?.posts?.length > 0) {
+      if (data.isPrivate || data.profile?.isPrivate) {
+        setErrorMsg(
+          data.message ||
+            `La cuenta @${userClean} es privada. Cambia la cuenta a pública en Instagram para poder cargar sus publicaciones y comentarios.`
+        );
+      } else if (data.profile?.posts?.length > 0) {
         setSelectedPost(data.profile.posts[0]);
       }
     } catch (err: any) {
+      setProfileData(null);
       setErrorMsg(err.message || 'Error al buscar el perfil de Instagram');
     } finally {
       setLoadingProfile(false);
@@ -315,16 +325,26 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
     setErrorMsg(null);
     setSelectedPost(target);
     setPostToSelectModal(null);
-    setStep(3); // Advance directly to filters step
+    setCommentsProgress({
+      percent: 5,
+      loadedCount: 0,
+      totalEstimated: target.commentsCount || 0,
+    });
+    setStep(3); // Advance immediately to percentage loading / filters screen
     setLoadingComments(true);
     try {
-      const data = await api.parseInstagramPost(
-        target.postUrl,
-        false,
-        profileData.username,
-        target.caption,
-        target.commentsCount
-      );
+      const data = await api.parseInstagramPostWithProgress(target.postUrl, {
+        author: profileData.username,
+        caption: target.caption,
+        commentsCount: target.commentsCount,
+        onProgress: (p) => {
+          setCommentsProgress({
+            percent: p.percent,
+            loadedCount: p.loadedCount,
+            totalEstimated: p.totalEstimated,
+          });
+        },
+      });
       setPostDetails({
         ...data.postDetails,
         imageUrl: target.imageUrl || data.postDetails.imageUrl,
@@ -332,7 +352,11 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
         authorAvatarUrl: profileData?.avatar || `/api/instagram/user-avatar?username=${encodeURIComponent(profileData?.username || target.caption || 'instagram')}`,
       });
       setRawParticipants(data.participants || []);
+      setFilters((prev) => ({ ...prev, removeDuplicateUsers: false }));
       setSourceType('instagram');
+      if (data.error && (!data.participants || data.participants.length === 0)) {
+        setErrorMsg(data.error);
+      }
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al cargar los comentarios de la publicación');
     } finally {
@@ -343,23 +367,40 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
   // Direct Link confirmation
   const handleConfirmDirectLink = async () => {
     setErrorMsg(null);
-    if (!directUrl.trim()) {
+    const cleanLink = directUrl.trim();
+    if (!cleanLink) {
       setErrorMsg('Por favor ingresa la URL de la publicación o reel de Instagram');
       return;
     }
+    setCommentsProgress({ percent: 5, loadedCount: 0, totalEstimated: 0 });
+    setStep(3); // Show percentage loading screen immediately
     setLoadingComments(true);
     try {
-      const data = await api.parseInstagramPost(directUrl.trim(), false);
+      const data = await api.parseInstagramPostWithProgress(cleanLink, {
+        onProgress: (p) => {
+          setCommentsProgress({
+            percent: p.percent,
+            loadedCount: p.loadedCount,
+            totalEstimated: p.totalEstimated,
+          });
+        },
+      });
+      if (data.error && (!data.participants || data.participants.length === 0)) {
+        setErrorMsg(data.error);
+        setStep(2);
+        return;
+      }
       setPostDetails({
         ...data.postDetails,
         sourceType: 'instagram',
         authorAvatarUrl: data.postDetails.author ? `/api/instagram/user-avatar?username=${encodeURIComponent(data.postDetails.author)}` : undefined,
       });
       setRawParticipants(data.participants || []);
+      setFilters((prev) => ({ ...prev, removeDuplicateUsers: false }));
       setSourceType('instagram');
-      setStep(3); // Advance directly to filters step
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al conectar con la publicación de Instagram');
+      setStep(2);
     } finally {
       setLoadingComments(false);
     }
@@ -539,16 +580,16 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
     setStep(4); // Advance to confirmation for multibrand
   };
 
-  const handleStart = () => {
+  const buildValidatedDrawConfig = (): PendingDrawPayload | null => {
     const totalRequired = winnersCount + substitutesCount;
     if (filterResults.validParticipants.length < totalRequired) {
       setErrorMsg(
         `Participantes válidos insuficientes (${filterResults.validParticipants.length}). Se necesitan al menos ${totalRequired} (${winnersCount} ganadores + ${substitutesCount} suplentes).`
       );
-      return;
+      return null;
     }
 
-    if (!postDetails) return;
+    if (!postDetails) return null;
 
     const finalPostDetails: PostDetails = {
       ...postDetails,
@@ -564,14 +605,22 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
         : undefined,
     } as any;
 
-    onStartGiveaway({
+    return {
       postUrl: postDetails.shortcode ? `https://www.instagram.com/p/${postDetails.shortcode}/` : 'https://sorteoo.app',
       postDetails: finalPostDetails,
       participants: filterResults.validParticipants,
       filters,
       winnersCount,
       substitutesCount: activeSource === 'multibrand' ? 0 : substitutesCount,
-    });
+    };
+  };
+
+  const getGiveawaySummaryLabel = () => {
+    if (activeSource === 'multibrand') {
+      return `Sorteo Multimarcas (${multibrandBrandsConfig?.length || multibrandBrands.length} marcas · ${filterResults.validParticipants.length} participantes)`;
+    }
+    const authorLabel = postDetails?.author ? `@${postDetails.author}` : currentMeta.name;
+    return `${currentMeta.name} (${authorLabel} · ${filterResults.validParticipants.length} participantes)`;
   };
 
   // Filter profile posts in wall search
@@ -987,7 +1036,7 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                     type="text"
                     value={targetUsername}
                     onChange={(e) => setTargetUsername(e.target.value.replace(/^@/, ''))}
-                    placeholder="@ ingresa usuario de instagram o pega link"
+                    placeholder="@ ingresa usuario de instagram"
                     className="w-full px-4 py-3 bg-neutral-50 border border-neutral-300 focus:border-rose-500 rounded-xl text-neutral-900 text-[16px] sm:text-sm font-semibold focus:outline-none focus:bg-white transition-all placeholder-neutral-400"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -1016,28 +1065,6 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                     </>
                   )}
                 </button>
-              </div>
-
-              {/* Quick direct post URL fallback */}
-              <div className="pt-1 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-neutral-600 bg-neutral-50 p-2.5 rounded-xl border border-neutral-200">
-                <span className="text-[11px] text-neutral-600 font-medium">¿Tienes el link directo del post?</span>
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <input
-                    type="url"
-                    value={directUrl}
-                    onChange={(e) => setDirectUrl(e.target.value)}
-                    placeholder="https://instagram.com/p/..."
-                    className="flex-1 sm:w-64 px-2.5 py-1.5 bg-white border border-neutral-300 rounded-lg text-[13px] text-neutral-900 focus:outline-none focus:border-rose-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleConfirmDirectLink}
-                    disabled={loadingComments}
-                    className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold rounded-lg text-xs cursor-pointer shrink-0 transition-colors"
-                  >
-                    {loadingComments ? 'Cargando...' : 'Cargar'}
-                  </button>
-                </div>
               </div>
 
               {/* Loading State */}
@@ -1094,6 +1121,27 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                     </button>
                   </div>
 
+                  {/* PRIVATE ACCOUNT OR EMPTY STATE NOTICE */}
+                  {profileData.isPrivate ? (
+                    <div className="p-4 sm:p-5 rounded-2xl border border-amber-200 bg-amber-50 flex items-start gap-3">
+                      <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                        <Lock className="w-4 h-4" />
+                      </div>
+                      <div className="space-y-1">
+                        <h4 className="text-xs sm:text-sm font-extrabold text-amber-950">
+                          Cuenta privada de Instagram
+                        </h4>
+                        <p className="text-xs text-amber-800 leading-relaxed">
+                          La cuenta <span className="font-bold">@{profileData.username}</span> es privada. Instagram solo permite cargar publicaciones y comentarios de cuentas públicas. Cambia la cuenta a pública e intenta nuevamente.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (!profileData.posts || profileData.posts.length === 0) ? (
+                    <div className="p-4 rounded-2xl border border-neutral-200 bg-neutral-50 text-center text-xs text-neutral-600">
+                      Esta cuenta pública aún no tiene publicaciones visibles en Instagram.
+                    </div>
+                  ) : null}
+
                   {/* POSTS GRID */}
                   {profileData.posts && profileData.posts.length > 0 && (
                     <div className="space-y-3">
@@ -1127,6 +1175,12 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                               onClick={() => {
                                 setSelectedPost(post);
                                 setPostToSelectModal(post);
+                                api.prefetchInstagramComments(
+                                  post.postUrl,
+                                  profileData.username,
+                                  post.caption,
+                                  post.commentsCount
+                                );
                               }}
                               className={`group relative rounded-2xl overflow-hidden border-2 cursor-pointer transition-all flex flex-col justify-between ${
                                 isSelected
@@ -1637,40 +1691,69 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
               </div>
 
               {loadingComments ? (
-                <div className="py-12 px-4 bg-neutral-50 rounded-2xl border border-rose-200 text-center space-y-4">
-                  <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-red-500 via-rose-500 to-amber-500 p-0.5 shadow-xl animate-pulse">
-                    <div className="w-full h-full rounded-2xl bg-white flex items-center justify-center p-2">
+                <div className="py-10 sm:py-12 px-5 bg-white rounded-3xl border-2 border-rose-100 shadow-lg shadow-rose-500/5 text-center space-y-5">
+                  <div className="w-20 h-20 mx-auto rounded-3xl bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] p-1 shadow-xl shadow-rose-500/20">
+                    <div className="w-full h-full rounded-[20px] bg-white flex items-center justify-center p-2.5">
                       <img
                         src="/assets/aistudio/Regalo_sonriente_con_lazo_y_destellos_f63477b8.png"
-                        alt="Cargando"
-                        className="w-full h-full object-contain"
+                        alt="Cargando comentarios"
+                        className="w-full h-full object-contain animate-bounce"
                       />
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="text-base sm:text-lg font-black text-neutral-900">
-                      Cargando todos los comentarios de Instagram...
+
+                  <div className="space-y-1.5">
+                    <span className="text-xs font-extrabold uppercase tracking-wider text-rose-500 block">
+                      Preparando participantes
+                    </span>
+                    <h3 className="text-xl sm:text-2xl font-black text-neutral-900">
+                      Cargando comentarios...
                     </h3>
-                    <p className="text-xs sm:text-sm text-neutral-600 max-w-md mx-auto">
-                      Recopilando todos los comentarios para garantizar un sorteo justo.
-                    </p>
+                    <div className="text-4xl sm:text-5xl font-black tabular-nums bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] bg-clip-text text-transparent pt-1">
+                      {Math.max(4, commentsProgress.percent)}%
+                    </div>
                   </div>
-                  <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-xl border border-neutral-200 text-xs font-bold text-rose-600 shadow-xs">
-                    <Sparkles className="w-4 h-4 animate-spin text-amber-500" />
-                    <span>Extrayendo participantes reales...</span>
+
+                  {/* Instagram Gradient Progress Bar */}
+                  <div className="max-w-md mx-auto space-y-2.5">
+                    <div className="w-full h-4 bg-neutral-100 rounded-full overflow-hidden border border-neutral-200 p-0.5">
+                      <div
+                        className="h-full rounded-full bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] transition-all duration-300 ease-out"
+                        style={{ width: `${Math.max(5, Math.min(100, commentsProgress.percent))}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs font-bold text-neutral-600 px-1">
+                      <span className="tabular-nums text-neutral-900">
+                        {commentsProgress.totalEstimated > 0
+                          ? `${commentsProgress.loadedCount.toLocaleString()} de ~${commentsProgress.totalEstimated.toLocaleString()} comentarios`
+                          : `${commentsProgress.loadedCount.toLocaleString()} comentarios cargados`}
+                      </span>
+                      <span className="text-rose-600 flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3 animate-spin" />
+                        <span>En vivo</span>
+                      </span>
+                    </div>
                   </div>
+
+                  <p className="text-xs text-neutral-500 max-w-sm mx-auto font-medium">
+                    Cargamos todos los participantes ahora para que al tocar sortear el video comience al instante.
+                  </p>
                 </div>
               ) : (
                 <>
                   {/* Summary of Comments Loaded */}
                   <div className="bg-neutral-50 p-3.5 sm:p-4 rounded-2xl border border-neutral-200 flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <span className="text-xs text-neutral-500 block">Comentarios detectados</span>
+                      <span className="text-xs text-neutral-500 block">Comentarios cargados</span>
                       <strong className="text-sm sm:text-base font-black text-neutral-900 truncate block">
-                        {postDetails?.commentsCount && postDetails.commentsCount > rawParticipants.length
-                          ? `${rawParticipants.length} de ${postDetails.commentsCount}`
-                          : `${rawParticipants.length} comentarios`}
+                        {rawParticipants.length.toLocaleString()} comentarios
                       </strong>
+                      {sourceType === 'instagram' && postDetails?.author && postDetails.author !== 'instagram_user' && (
+                        <span className="text-[11px] text-neutral-500 block mt-0.5">
+                          Excluye comentarios de @{postDetails.author}
+                        </span>
+                      )}
                     </div>
                     <div className="text-right shrink-0">
                       <span className="text-xs text-neutral-500 block">Válidos para sortear</span>
@@ -2027,25 +2110,12 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-100">
-                <button
-                  type="button"
-                  onClick={() => setStep(3)}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Atrás</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleStart}
-                  className="w-full sm:w-auto min-w-[280px] sm:min-w-[340px] flex items-center justify-center gap-3 py-5 px-8 sm:px-12 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white text-base sm:text-lg font-black rounded-full shadow-2xl shadow-rose-500/30 ring-4 ring-rose-500/20 hover:ring-rose-400/50 transition-all transform hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-pulse"
-                >
-                  <Play className="w-6 h-6 fill-current text-white shrink-0" />
-                  <span>COMENZAR SORTEOO</span>
-                  <Sparkles className="w-5 h-5 text-amber-200 shrink-0" />
-                </button>
-              </div>
+              <CheckoutPaymentBox
+                giveawaySummary={getGiveawaySummaryLabel()}
+                buildDrawConfig={buildValidatedDrawConfig}
+                onBack={() => setStep(3)}
+                onLaunchApprovedDraw={onStartGiveaway}
+              />
             </div>
           )}
 
@@ -2090,25 +2160,12 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
                 </div>
               </div>
 
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-100">
-                <button
-                  type="button"
-                  onClick={() => setStep(3)}
-                  className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
-                >
-                  <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Atrás</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleStart}
-                  className="w-full sm:w-auto min-w-[280px] sm:min-w-[340px] flex items-center justify-center gap-3 py-5 px-8 sm:px-12 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white text-base sm:text-lg font-black rounded-full shadow-2xl shadow-rose-500/30 ring-4 ring-rose-500/20 hover:ring-rose-400/50 transition-all transform hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-pulse"
-                >
-                  <Play className="w-6 h-6 fill-current text-white shrink-0" />
-                  <span>COMENZAR SORTEOO</span>
-                  <Sparkles className="w-5 h-5 text-amber-200 shrink-0" />
-                </button>
-              </div>
+              <CheckoutPaymentBox
+                giveawaySummary={getGiveawaySummaryLabel()}
+                buildDrawConfig={buildValidatedDrawConfig}
+                onBack={() => setStep(3)}
+                onLaunchApprovedDraw={onStartGiveaway}
+              />
             </div>
           )}
         </div>
@@ -2160,25 +2217,12 @@ export const CreateGiveawayWizard: React.FC<CreateGiveawayWizardProps> = ({
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-neutral-100">
-            <button
-              type="button"
-              onClick={() => setStep(4)}
-              className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Atrás</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleStart}
-              className="w-full sm:w-auto min-w-[280px] sm:min-w-[340px] flex items-center justify-center gap-3 py-5 px-8 sm:px-12 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 text-white text-base sm:text-lg font-black rounded-full shadow-2xl shadow-rose-500/30 ring-4 ring-rose-500/20 hover:ring-rose-400/50 transition-all transform hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-pulse"
-            >
-              <Play className="w-6 h-6 fill-current text-white shrink-0" />
-              <span>COMENZAR SORTEOO</span>
-              <Sparkles className="w-5 h-5 text-amber-200 shrink-0" />
-            </button>
-          </div>
+          <CheckoutPaymentBox
+            giveawaySummary={getGiveawaySummaryLabel()}
+            buildDrawConfig={buildValidatedDrawConfig}
+            onBack={() => setStep(4)}
+            onLaunchApprovedDraw={onStartGiveaway}
+          />
         </div>
       )}
     </div>

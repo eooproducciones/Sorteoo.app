@@ -38,12 +38,6 @@ export const AuthModal: React.FC = () => {
     }
   };
 
-  const fillDemoAccount = () => {
-    setEmail('demo@sorteoo.app');
-    setPassword('sorteoo123');
-    setMode('login');
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
       <div className="relative w-full max-w-md bg-neutral-900 border border-neutral-800 rounded-2xl p-6 sm:p-8 shadow-2xl">
@@ -68,20 +62,6 @@ export const AuthModal: React.FC = () => {
             {mode === 'forgot' && 'Recupera el acceso a tu cuenta'}
           </p>
         </div>
-
-        {/* Quick Demo Button */}
-        {mode === 'login' && (
-          <div className="mb-4">
-            <button
-              type="button"
-              onClick={fillDemoAccount}
-              className="w-full py-2 px-3 bg-neutral-950 border border-neutral-800 hover:border-neutral-700 text-xs text-neutral-300 rounded-xl flex items-center justify-between transition-colors"
-            >
-              <span>Probar con cuenta Demo (1 clic)</span>
-              <span className="font-mono text-rose-400 font-semibold">demo@sorteoo.app</span>
-            </button>
-          </div>
-        )}
 
         {/* Tabs for Login / Register */}
         {mode !== 'forgot' && (

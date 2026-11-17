@@ -11,7 +11,6 @@ import {
   ArrowLeft,
   AtSign,
   Grid,
-  Link as LinkIcon,
   MessageCircle,
   Heart,
   Camera,
@@ -20,6 +19,7 @@ import {
   CheckCircle2,
   RefreshCw,
   ChevronDown,
+  Lock,
 } from 'lucide-react';
 import {
   MultibrandUnifySummary,
@@ -64,14 +64,17 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
   // Option: 'post' (Publicación) vs 'story' (Historia)
   const [mediaType, setMediaType] = useState<'post' | 'story'>('post');
 
-  // For Publicación: 'username' vs 'link'
-  const [postSourceMode, setPostSourceMode] = useState<'username' | 'link'>('username');
+  // For Publicación: by Instagram username wall
   const [usernameInput, setUsernameInput] = useState('');
-  const [directPostUrl, setDirectPostUrl] = useState('');
   const [profileData, setProfileData] = useState<InstagramProfile | null>(null);
   const [selectedPost, setSelectedPost] = useState<InstagramProfilePost | null>(null);
   const [loadingSearch, setLoadingSearch] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
+  const [commentsProgress, setCommentsProgress] = useState<{
+    percent: number;
+    loadedCount: number;
+    totalEstimated: number;
+  }>({ percent: 0, loadedCount: 0, totalEstimated: 0 });
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Pagination & filtering for profile posts
@@ -92,12 +95,8 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
       return;
     }
 
-    // Direct post link detected in username box
     if (raw.includes('instagram.com/p/') || raw.includes('instagram.com/reel/') || raw.includes('instagram.com/tv/')) {
-      const fullUrl = raw.startsWith('http') ? raw : `https://${raw}`;
-      setDirectPostUrl(fullUrl);
-      setPostSourceMode('link');
-      handleLoadDirectUrlWithLink(fullUrl);
+      setErrorMsg('Ingresa el @usuario de Instagram para elegir la publicación del perfil.');
       return;
     }
 
@@ -116,38 +115,51 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
 
     setErrorMsg(null);
     setLoadingSearch(true);
+    setSelectedPost(null);
+    setLoadedPostDetails(null);
+    setRawParticipants([]);
     try {
       const res = await api.getInstagramProfileFeed(userClean);
       setProfileData(res.profile);
       setVisiblePostsCount(6);
-
-      // Auto-select first post initially if none selected
-      if (res.profile?.posts?.length > 0) {
-        const first = res.profile.posts[0];
-        setSelectedPost(first);
-        handleSelectPost(first, res.profile.username);
+      if (res.isPrivate || res.profile?.isPrivate) {
+        setErrorMsg(
+          res.message ||
+            `La cuenta @${userClean} es privada. Cambia la cuenta a pública en Instagram para poder cargar sus publicaciones.`
+        );
       }
     } catch (err: any) {
+      setProfileData(null);
       setErrorMsg(err.message || 'Error al buscar el perfil de Instagram');
     } finally {
       setLoadingSearch(false);
     }
   };
 
-  // 2. Select a post from the grid and load comments
+  // 2. Select a post from the grid and load comments with live %
   const handleSelectPost = async (post: InstagramProfilePost, hostAuthor?: string) => {
     setErrorMsg(null);
     setSelectedPost(post);
+    setCommentsProgress({
+      percent: 5,
+      loadedCount: 0,
+      totalEstimated: post.commentsCount || 0,
+    });
     setLoadingComments(true);
     try {
       const author = hostAuthor || profileData?.username;
-      const data = await api.parseInstagramPost(
-        post.postUrl,
-        false,
+      const data = await api.parseInstagramPostWithProgress(post.postUrl, {
         author,
-        post.caption,
-        post.commentsCount
-      );
+        caption: post.caption,
+        commentsCount: post.commentsCount,
+        onProgress: (p) => {
+          setCommentsProgress({
+            percent: p.percent,
+            loadedCount: p.loadedCount,
+            totalEstimated: p.totalEstimated,
+          });
+        },
+      });
       setLoadedPostDetails({
         ...data.postDetails,
         imageUrl: post.imageUrl || data.postDetails.imageUrl,
@@ -196,43 +208,7 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
     }
   };
 
-  // 3. Load from direct URL
-  const handleLoadDirectUrlWithLink = async (urlToLoad: string) => {
-    const cleanUrl = urlToLoad.trim();
-    if (!cleanUrl || !cleanUrl.includes('instagram.com/')) {
-      setErrorMsg('Ingresa un enlace válido de Instagram');
-      return;
-    }
-    setErrorMsg(null);
-    setLoadingComments(true);
-    try {
-      const data = await api.parseInstagramPost(cleanUrl, false);
-      setLoadedPostDetails({
-        ...data.postDetails,
-        sourceType: 'instagram',
-      });
-      setRawParticipants(data.participants || []);
-      setSelectedPost({
-        shortcode: data.postDetails.shortcode,
-        postUrl: cleanUrl,
-        caption: data.postDetails.caption,
-        imageUrl: data.postDetails.imageUrl,
-        likes: data.postDetails.likes,
-        commentsCount: data.postDetails.commentsCount,
-        date: 'Reciente',
-      });
-    } catch (err: any) {
-      setErrorMsg(err.message || 'Error al cargar los comentarios');
-    } finally {
-      setLoadingComments(false);
-    }
-  };
-
-  const handleLoadDirectUrl = () => {
-    handleLoadDirectUrlWithLink(directPostUrl);
-  };
-
-  // 4. Load from Story
+  // 3. Load from Story
   const handleLoadStory = async () => {
     setErrorMsg(null);
     const userClean = storyUsername.trim().replace(/^@/, '');
@@ -242,6 +218,7 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
       return;
     }
 
+    setCommentsProgress({ percent: 10, loadedCount: 0, totalEstimated: 0 });
     setLoadingComments(true);
     try {
       let participants: Participant[] = [];
@@ -258,21 +235,34 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
           avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(u)}`,
           timestamp: new Date().toISOString(),
         }));
+        setCommentsProgress({ percent: 100, loadedCount: participants.length, totalEstimated: participants.length });
       } else {
         const res = await api.getInstagramProfileFeed(userClean);
+        if (res.isPrivate || res.profile?.isPrivate) {
+          setErrorMsg(
+            res.message ||
+              `La cuenta @${userClean} es privada. Instagram solo permite cargar publicaciones de cuentas públicas, o pegá los usuarios participantes en el campo de texto.`
+          );
+          return;
+        }
         const posts = res.profile?.posts || [];
         if (posts.length > 0) {
-          const data = await api.parseInstagramPost(posts[0].postUrl, false, userClean);
+          const data = await api.parseInstagramPostWithProgress(posts[0].postUrl, {
+            author: userClean,
+            commentsCount: posts[0].commentsCount,
+            onProgress: (p) => {
+              setCommentsProgress({
+                percent: p.percent,
+                loadedCount: p.loadedCount,
+                totalEstimated: p.totalEstimated,
+              });
+            },
+          });
           participants = data.participants || [];
         }
         if (participants.length === 0) {
-          const sample = ['valen_gomez', 'martina.lopez', 'lucas_ok', 'sofi_ruiz', 'agus.pereyra', 'mateo_b', 'cami.martinez', 'nacho_10'];
-          participants = sample.map((u) => ({
-            username: u,
-            comment: 'Respuesta a historia',
-            avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${u}`,
-            timestamp: new Date().toISOString(),
-          }));
+          setErrorMsg('No se encontraron participantes en la cuenta ingresada. Pegá los usuarios participantes de tu historia en el campo de texto.');
+          return;
         }
       }
 
@@ -418,15 +408,15 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
   return (
     <div className="space-y-5">
       {errorMsg && (
-        <div className="p-3 bg-rose-500/15 border border-rose-500/30 rounded-2xl flex items-center justify-between gap-2 text-rose-300 text-xs">
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-2xl flex items-center justify-between gap-2 text-rose-700 text-xs font-semibold">
           <div className="flex items-center gap-2 min-w-0">
-            <AlertCircle className="w-4 h-4 shrink-0 text-rose-400" />
+            <AlertCircle className="w-4 h-4 shrink-0 text-rose-500" />
             <span className="truncate">{errorMsg}</span>
           </div>
           <button
             type="button"
             onClick={() => setErrorMsg(null)}
-            className="text-neutral-400 hover:text-white text-base leading-none p-1 cursor-pointer"
+            className="text-rose-400 hover:text-rose-700 text-base leading-none p-1 cursor-pointer"
           >
             ×
           </button>
@@ -483,42 +473,15 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
           {/* CASE A: PUBLICACIÓN */}
           {mediaType === 'post' && (
             <div className="space-y-4">
-              <div className="flex gap-2 text-xs">
-                <button
-                  type="button"
-                  onClick={() => setPostSourceMode('username')}
-                  className={`px-3.5 py-1.5 rounded-xl font-bold transition-colors cursor-pointer ${
-                    postSourceMode === 'username'
-                      ? 'bg-neutral-800 text-white'
-                      : 'text-neutral-600 hover:text-neutral-900 bg-neutral-100'
-                  }`}
-                >
-                  Por usuario
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPostSourceMode('link')}
-                  className={`px-3.5 py-1.5 rounded-xl font-bold transition-colors cursor-pointer ${
-                    postSourceMode === 'link'
-                      ? 'bg-neutral-800 text-white'
-                      : 'text-neutral-600 hover:text-neutral-900 bg-neutral-100'
-                  }`}
-                >
-                  Por enlace
-                </button>
-              </div>
-
-              {postSourceMode === 'username' ? (
-                <div className="space-y-4">
-                  {/* Search Bar */}
-                  <div className="flex flex-col sm:flex-row gap-2.5">
-                    <div className="relative flex-1">
-                      <input
-                        type="text"
-                        value={usernameInput}
-                        onChange={(e) => setUsernameInput(e.target.value.replace(/^@/, ''))}
-                        placeholder="@ ingresa usuario de instagram o pega link"
-                        className="w-full px-4 py-3 bg-neutral-50 border border-neutral-300 focus:border-rose-500 rounded-xl text-neutral-900 text-[16px] sm:text-sm font-semibold focus:outline-none placeholder-neutral-400"
+              {/* Search Bar */}
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value.replace(/^@/, ''))}
+                    placeholder="@ ingresa usuario de instagram"
+                    className="w-full px-4 py-3 bg-neutral-50 border border-neutral-300 focus:border-rose-500 rounded-xl text-neutral-900 text-[16px] sm:text-sm font-semibold focus:outline-none placeholder-neutral-400"
                         onKeyDown={(e) => {
                           if (e.key === 'Enter') {
                             e.preventDefault();
@@ -549,13 +512,17 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
 
                   {/* Profile Search Loading */}
                   {loadingSearch && (
-                    <div className="p-6 bg-neutral-950/80 rounded-2xl border border-rose-500/30 text-center space-y-2">
-                      <div className="w-10 h-10 mx-auto rounded-xl bg-gradient-to-tr from-red-500 via-rose-500 to-amber-500 p-0.5 shadow-xl animate-bounce">
-                        <div className="w-full h-full rounded-xl bg-neutral-950 flex items-center justify-center text-lg">
-                          🎁
+                    <div className="p-6 bg-neutral-50 rounded-2xl border border-rose-200 text-center space-y-2">
+                      <div className="w-12 h-12 mx-auto rounded-2xl bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] p-0.5 shadow-lg animate-bounce">
+                        <div className="w-full h-full rounded-[14px] bg-white flex items-center justify-center p-1.5">
+                          <img
+                            src="/assets/aistudio/Regalo_sonriente_con_lazo_y_destellos_f63477b8.png"
+                            alt="Cargando"
+                            className="w-full h-full object-contain"
+                          />
                         </div>
                       </div>
-                      <h3 className="text-xs sm:text-sm font-extrabold text-white">
+                      <h3 className="text-xs sm:text-sm font-extrabold text-neutral-900">
                         Cargando publicaciones de @{usernameInput || 'tu cuenta'}...
                       </h3>
                     </div>
@@ -563,25 +530,27 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
 
                   {/* POSTS GRID TO CHOOSE FROM */}
                   {profileData && !loadingSearch && (
-                    <div className="space-y-4 pt-2 border-t border-neutral-800">
+                    <div className="space-y-4 pt-2 border-t border-neutral-100">
                       {/* Host Account Badge */}
-                      <div className="bg-neutral-950/90 p-3 sm:p-4 rounded-2xl border border-neutral-800 flex items-center justify-between gap-3">
+                      <div className="bg-neutral-50 p-3 sm:p-4 rounded-2xl border border-neutral-200 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <img
                             src={profileData.avatar}
                             alt={profileData.username}
                             referrerPolicy="no-referrer"
-                            className="w-10 h-10 rounded-full border border-neutral-700 object-cover shrink-0"
+                            className="w-10 h-10 rounded-full border border-neutral-300 object-cover shrink-0"
                             onError={(e) => {
                               (e.target as HTMLImageElement).src = `https://api.dicebear.com/7.x/bottts/svg?seed=${profileData.username}`;
                             }}
                           />
                           <div className="min-w-0">
                             <div className="flex items-center gap-1.5 flex-wrap">
-                              <span className="font-extrabold text-white text-xs sm:text-sm">@{profileData.username}</span>
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                              <span className="font-extrabold text-neutral-900 text-xs sm:text-sm">@{profileData.username}</span>
+                              {!profileData.isPrivate && (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              )}
                             </div>
-                            <p className="text-[11px] text-neutral-400 truncate">
+                            <p className="text-[11px] text-neutral-500 truncate">
                               {profileData.followersCount > 0
                                 ? `${profileData.followersCount.toLocaleString()} seguidores · ${profileData.postsCount} posts`
                                 : `@${profileData.username}`}
@@ -592,30 +561,46 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                         <button
                           type="button"
                           onClick={handleSearchProfile}
-                          className="inline-flex items-center gap-1 text-[11px] text-neutral-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-neutral-900 border border-neutral-800 transition-colors shrink-0 cursor-pointer"
+                          className="inline-flex items-center gap-1 text-[11px] text-neutral-600 hover:text-neutral-900 px-2.5 py-1.5 rounded-lg bg-white border border-neutral-200 transition-colors shrink-0 cursor-pointer"
                         >
                           <RefreshCw className="w-3 h-3" />
                           <span className="hidden sm:inline">Actualizar</span>
                         </button>
                       </div>
 
+                      {profileData.isPrivate && (
+                        <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50 flex items-start gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                            <Lock className="w-4 h-4" />
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="text-xs sm:text-sm font-extrabold text-amber-950">
+                              Cuenta privada de Instagram
+                            </h4>
+                            <p className="text-xs text-amber-800 leading-relaxed">
+                              La cuenta <span className="font-bold">@{profileData.username}</span> es privada. Instagram solo permite cargar publicaciones y comentarios de cuentas públicas.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Header for grid */}
                       {profileData.posts && profileData.posts.length > 0 && (
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-black text-white flex items-center gap-1.5">
-                              <Grid className="w-3.5 h-3.5 text-rose-400" />
-                              <span>Toca la publicación para seleccionarla:</span>
+                            <span className="text-xs font-black text-neutral-900 flex items-center gap-1.5">
+                              <Grid className="w-3.5 h-3.5 text-rose-500" />
+                              <span>Toca la publicación para cargar sus comentarios:</span>
                             </span>
 
                             <div className="relative w-40 sm:w-52">
-                              <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-500" />
+                              <Search className="w-3 h-3 absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400" />
                               <input
                                 type="text"
                                 value={postSearchFilter}
                                 onChange={(e) => setPostSearchFilter(e.target.value)}
                                 placeholder="Filtrar posts..."
-                                className="w-full pl-7 pr-2.5 py-1 bg-neutral-950 border border-neutral-800 rounded-lg text-[13px] text-white placeholder-neutral-500 focus:outline-none focus:border-rose-500"
+                                className="w-full pl-7 pr-2.5 py-1 bg-neutral-50 border border-neutral-200 rounded-lg text-[13px] text-neutral-900 placeholder-neutral-400 focus:outline-none focus:bg-white focus:border-rose-500"
                               />
                             </div>
                           </div>
@@ -632,12 +617,12 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                                   onClick={() => handleSelectPost(post, profileData.username)}
                                   className={`group relative rounded-2xl overflow-hidden border-2 cursor-pointer transition-all flex flex-col justify-between ${
                                     isSelected
-                                      ? 'border-rose-500 ring-4 ring-rose-500/25 bg-neutral-900 shadow-xl'
-                                      : 'border-neutral-800 hover:border-neutral-700 bg-neutral-950 hover:bg-neutral-900/60'
+                                      ? 'border-rose-500 ring-4 ring-rose-500/20 bg-white shadow-xl shadow-rose-500/10'
+                                      : 'border-neutral-200 hover:border-neutral-300 bg-white shadow-xs hover:shadow-md'
                                   }`}
                                 >
                                   {/* Media Thumbnail */}
-                                  <div className="relative aspect-square w-full bg-neutral-950 overflow-hidden">
+                                  <div className="relative aspect-square w-full bg-neutral-100 overflow-hidden">
                                     {!hasImgFailed && post.imageUrl ? (
                                       <img
                                         src={post.imageUrl}
@@ -651,16 +636,16 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                                         }}
                                       />
                                     ) : (
-                                      <div className="w-full h-full bg-gradient-to-tr from-neutral-950 via-neutral-900 to-neutral-950 p-4 flex flex-col justify-between">
+                                      <div className="w-full h-full bg-gradient-to-tr from-neutral-100 via-white to-neutral-100 p-4 flex flex-col justify-between">
                                         <div className="flex items-center justify-between">
                                           <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-red-500 via-rose-500 to-amber-500 flex items-center justify-center text-white">
                                             <Sparkles className="w-3.5 h-3.5" />
                                           </div>
-                                          <span className="text-[10px] font-mono text-neutral-400 bg-neutral-800 px-1.5 py-0.5 rounded">
+                                          <span className="text-[10px] font-mono text-neutral-500 bg-neutral-200 px-1.5 py-0.5 rounded">
                                             {post.shortcode}
                                           </span>
                                         </div>
-                                        <p className="text-xs text-neutral-200 line-clamp-3 italic">
+                                        <p className="text-xs text-neutral-700 line-clamp-3 italic">
                                           “{post.caption || 'Publicación oficial de Instagram'}”
                                         </p>
                                         <span className="text-[10px] text-neutral-500 block font-semibold">
@@ -694,7 +679,7 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                                         <MessageCircle className="w-3 h-3 text-rose-400 fill-current" />
                                         <span>{post.commentsCount}</span>
                                       </span>
-                                      <span className="flex items-center gap-1 text-neutral-300">
+                                      <span className="flex items-center gap-1 text-neutral-200">
                                         <Heart className="w-3 h-3 text-rose-400" />
                                         <span>{post.likes}</span>
                                       </span>
@@ -703,12 +688,12 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
 
                                   {/* Caption & Date */}
                                   <div className="p-2.5 space-y-1.5 flex-1 flex flex-col justify-between">
-                                    <p className="text-xs text-neutral-200 line-clamp-2 leading-tight">
+                                    <p className="text-xs text-neutral-800 font-medium line-clamp-2 leading-tight">
                                       {post.caption || `Publicación de @${profileData.username}`}
                                     </p>
-                                    <div className="pt-1.5 border-t border-neutral-850 flex items-center justify-between text-[10px] text-neutral-400">
+                                    <div className="pt-1.5 border-t border-neutral-100 flex items-center justify-between text-[10px] text-neutral-500">
                                       <span>{post.date}</span>
-                                      <span className={`font-bold flex items-center gap-0.5 ${isSelected ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                      <span className={`font-bold flex items-center gap-0.5 ${isSelected ? 'text-emerald-600' : 'text-rose-600'}`}>
                                         <span>{isSelected ? 'Seleccionada' : 'Seleccionar'}</span>
                                         <ArrowRight className="w-3 h-3" />
                                       </span>
@@ -726,16 +711,16 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                                 type="button"
                                 onClick={handleLoadMorePosts}
                                 disabled={loadingMorePosts}
-                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-neutral-900 hover:bg-neutral-850 text-white text-xs font-black rounded-xl border border-neutral-700 transition-all shadow-md active:scale-95 cursor-pointer disabled:opacity-50"
+                                className="inline-flex items-center gap-2 px-5 py-2.5 bg-white hover:bg-neutral-50 text-neutral-800 text-xs font-black rounded-xl border border-neutral-300 transition-all shadow-xs active:scale-95 cursor-pointer disabled:opacity-50"
                               >
                                 {loadingMorePosts ? (
                                   <>
-                                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-400" />
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin text-rose-500" />
                                     <span>Cargando más publicaciones...</span>
                                   </>
                                 ) : (
                                   <>
-                                    <ChevronDown className="w-3.5 h-3.5 text-rose-400" />
+                                    <ChevronDown className="w-3.5 h-3.5 text-rose-500" />
                                     <span>Cargar más publicaciones</span>
                                   </>
                                 )}
@@ -746,29 +731,6 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                       )}
                     </div>
                   )}
-                </div>
-              ) : (
-                /* Mode Por Enlace */
-                <div className="space-y-3">
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <input
-                      type="text"
-                      value={directPostUrl}
-                      onChange={(e) => setDirectPostUrl(e.target.value)}
-                      placeholder="https://www.instagram.com/p/..."
-                      className="flex-1 px-4 py-3 bg-neutral-950 border border-neutral-700 focus:border-rose-500 rounded-xl text-white text-[16px] sm:text-sm font-semibold focus:outline-none placeholder-neutral-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleLoadDirectUrl}
-                      disabled={loadingComments}
-                      className="px-6 py-3 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 disabled:opacity-50 text-white text-xs sm:text-sm font-black rounded-xl shadow-md transition-all flex items-center justify-center gap-2 shrink-0 cursor-pointer"
-                    >
-                      {loadingComments ? 'Cargando...' : 'Cargar comentarios'}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -781,7 +743,7 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                   value={storyUsername}
                   onChange={(e) => setStoryUsername(e.target.value.replace(/^@/, ''))}
                   placeholder="@ ingresa usuario de la historia"
-                  className="flex-1 px-4 py-3 bg-neutral-950 border border-neutral-700 focus:border-rose-500 rounded-xl text-white text-[16px] sm:text-sm font-semibold focus:outline-none placeholder-neutral-500"
+                  className="flex-1 px-4 py-3 bg-neutral-50 border border-neutral-300 focus:border-rose-500 focus:bg-white rounded-xl text-neutral-900 text-[16px] sm:text-sm font-semibold focus:outline-none placeholder-neutral-400"
                 />
                 <button
                   type="button"
@@ -793,8 +755,8 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                 </button>
               </div>
 
-              <div className="p-3 bg-neutral-950 rounded-2xl border border-neutral-800 space-y-1">
-                <span className="text-[11px] font-bold text-neutral-400 block">
+              <div className="p-3 bg-neutral-50 rounded-2xl border border-neutral-200 space-y-1">
+                <span className="text-[11px] font-bold text-neutral-600 block">
                   O pegar participantes de respuestas/menciones:
                 </span>
                 <textarea
@@ -802,50 +764,90 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                   value={manualStoryUsers}
                   onChange={(e) => setManualStoryUsers(e.target.value)}
                   placeholder="@usuario1, @usuario2, @usuario3..."
-                  className="w-full px-3 py-2 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white placeholder-neutral-600 focus:outline-none focus:border-rose-500"
+                  className="w-full px-3 py-2 bg-white border border-neutral-200 rounded-xl text-xs text-neutral-900 placeholder-neutral-400 focus:outline-none focus:border-rose-500"
                 />
               </div>
             </div>
           )}
 
-          {/* Comments Loading Spinner inside Step 2 */}
+          {/* Dedicated Percentage Comments Loading Card inside Step 2 */}
           {loadingComments && (
-            <div className="p-4 bg-neutral-950 rounded-2xl border border-rose-500/30 flex items-center justify-center gap-3 text-rose-300 text-xs font-bold">
-              <Sparkles className="w-4 h-4 animate-spin text-amber-300 shrink-0" />
-              <span>Extrayendo todos los comentarios de la publicación seleccionada...</span>
+            <div className="py-8 px-5 bg-neutral-50 rounded-3xl border-2 border-rose-200 text-center space-y-4">
+              <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-tr from-[#F58529] via-[#DD2A7B] to-[#8134AF] p-0.5 shadow-lg">
+                <div className="w-full h-full rounded-[14px] bg-white flex items-center justify-center p-2">
+                  <img
+                    src="/assets/aistudio/Regalo_sonriente_con_lazo_y_destellos_f63477b8.png"
+                    alt="Cargando comentarios"
+                    className="w-full h-full object-contain animate-bounce"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="text-lg sm:text-xl font-black text-neutral-900">
+                  Cargando comentarios...
+                </h3>
+                <div className="text-3xl sm:text-4xl font-black tabular-nums bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] bg-clip-text text-transparent">
+                  {Math.max(4, commentsProgress.percent)}%
+                </div>
+              </div>
+
+              <div className="max-w-md mx-auto space-y-2">
+                <div className="w-full h-3.5 bg-white rounded-full overflow-hidden border border-neutral-200 p-0.5">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] transition-all duration-300 ease-out"
+                    style={{ width: `${Math.max(5, Math.min(100, commentsProgress.percent))}%` }}
+                  />
+                </div>
+                <div className="flex items-center justify-between text-xs font-bold text-neutral-600 px-1">
+                  <span className="tabular-nums text-neutral-900">
+                    {commentsProgress.totalEstimated > 0
+                      ? `${commentsProgress.loadedCount.toLocaleString()} de ~${commentsProgress.totalEstimated.toLocaleString()} comentarios`
+                      : `${commentsProgress.loadedCount.toLocaleString()} comentarios cargados`}
+                  </span>
+                  <span className="text-rose-600 flex items-center gap-1">
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    <span>En vivo</span>
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-xs text-neutral-500 font-medium">
+                Los comentarios se cargan ahora para que el sorteo comience al instante.
+              </p>
             </div>
           )}
 
           {/* Status badge when participants loaded */}
           {loadedPostDetails && !loadingComments && (
-            <div className="p-3.5 bg-neutral-950 rounded-2xl border border-emerald-500/30 flex items-center justify-between gap-3">
+            <div className="p-3.5 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500 text-white flex items-center justify-center shrink-0">
                   <CheckCircle2 className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <span className="text-xs sm:text-sm font-black text-white block truncate">
-                    {unifiedList.length} participantes únicos listos para sortear
+                  <span className="text-xs sm:text-sm font-black text-neutral-900 block truncate">
+                    {rawParticipants.length.toLocaleString()} comentarios cargados ({unifiedList.length.toLocaleString()} participantes únicos)
                   </span>
-                  <span className="text-[11px] text-neutral-400 block truncate">
+                  <span className="text-[11px] text-neutral-600 block truncate">
                     {mediaType === 'story'
                       ? 'Historia de Instagram'
                       : `@${loadedPostDetails.author || profileData?.username || 'instagram'}: ${loadedPostDetails.caption || 'Publicación'}`}
                   </span>
                 </div>
               </div>
-              <span className="text-xs font-black text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-xl shrink-0">
-                Lista
+              <span className="text-xs font-black text-emerald-700 bg-white border border-emerald-200 px-2.5 py-1 rounded-xl shrink-0">
+                100% Listo
               </span>
             </div>
           )}
 
           {/* Navigation */}
-          <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+          <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
             <button
               type="button"
               onClick={onBack}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Atrás</span>
@@ -854,7 +856,7 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
             <button
               type="button"
               onClick={handleProceedToPrizes}
-              disabled={unifiedList.length === 0}
+              disabled={unifiedList.length === 0 || loadingComments}
               className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 disabled:opacity-40 text-white text-xs sm:text-sm font-extrabold rounded-xl shadow-lg transition-all cursor-pointer"
             >
               <span>Continuar a Premios</span>
@@ -868,13 +870,13 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
       {/* STEP 3: EMPRENDIMIENTOS Y PREMIOS (SIN LÍMITE)       */}
       {/* ==================================================== */}
       {currentStep === 3 && (
-        <div className="bg-neutral-900 border border-neutral-800 rounded-3xl p-5 sm:p-7 space-y-5 shadow-xl">
-          <div className="border-b border-neutral-800 pb-3 flex items-center justify-between">
+        <div className="bg-white border border-neutral-200/90 rounded-3xl p-5 sm:p-7 space-y-5 shadow-xl shadow-neutral-200/40">
+          <div className="border-b border-neutral-100 pb-3 flex items-center justify-between">
             <div>
-              <h2 className="text-xl sm:text-2xl font-black text-white">
+              <h2 className="text-xl sm:text-2xl font-black text-neutral-900">
                 Emprendimientos y Premios ({brandsConfig.length})
               </h2>
-              <p className="text-xs text-neutral-400 mt-0.5">
+              <p className="text-xs text-neutral-500 mt-0.5">
                 Se elegirá 1 ganador por cada marca agregada
               </p>
             </div>
@@ -882,7 +884,7 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
             <button
               type="button"
               onClick={handleAddBrandSlot}
-              className="text-xs font-black text-white px-3.5 py-2 rounded-xl bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95"
+              className="text-xs font-black text-white px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] hover:opacity-95 transition-all flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Agregar marca</span>
@@ -894,20 +896,20 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
             {brandsConfig.map((brand, idx) => (
               <div
                 key={brand.id}
-                className="p-3 rounded-2xl bg-neutral-950 border border-neutral-800 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
+                className="p-3 rounded-2xl bg-neutral-50 border border-neutral-200 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5"
               >
                 <div className="flex items-center justify-between sm:justify-start gap-2 shrink-0">
-                  <span className="w-7 h-7 rounded-xl bg-neutral-900 text-amber-400 border border-amber-500/30 flex items-center justify-center font-black text-xs">
+                  <span className="w-7 h-7 rounded-xl bg-white text-rose-600 border border-rose-200 flex items-center justify-center font-black text-xs shadow-2xs">
                     #{idx + 1}
                   </span>
-                  <span className="text-xs font-bold text-neutral-400 sm:hidden">
+                  <span className="text-xs font-bold text-neutral-600 sm:hidden">
                     Marca #{idx + 1}
                   </span>
                   <button
                     type="button"
                     onClick={() => handleRemoveBrand(brand.id)}
                     disabled={brandsConfig.length <= 1}
-                    className="p-1 text-neutral-500 hover:text-rose-400 sm:hidden disabled:opacity-20 cursor-pointer"
+                    className="p-1 text-neutral-400 hover:text-rose-600 sm:hidden disabled:opacity-20 cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -915,7 +917,7 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
 
                 <div className="flex-1">
                   <div className="relative">
-                    <AtSign className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+                    <AtSign className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                     <input
                       type="text"
                       value={brand.brandInstagram}
@@ -927,20 +929,20 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                         )
                       }
                       placeholder="@emprendimiento"
-                      className="w-full pl-8 pr-3 py-2 bg-neutral-900 border border-neutral-800 focus:border-rose-500 rounded-xl text-white text-[16px] sm:text-xs font-bold focus:outline-none"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-neutral-200 focus:border-rose-500 rounded-xl text-neutral-900 text-[16px] sm:text-xs font-bold focus:outline-none"
                     />
                   </div>
                 </div>
 
                 <div className="flex-1">
                   <div className="relative">
-                    <Gift className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500" />
+                    <Gift className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
                     <input
                       type="text"
                       value={brand.prize}
                       onChange={(e) => handleUpdateBrand(brand.id, 'prize', e.target.value)}
                       placeholder="Premio a sortear (ej: Remera, Orden de compra)"
-                      className="w-full pl-8 pr-3 py-2 bg-neutral-900 border border-neutral-800 focus:border-rose-500 rounded-xl text-white text-[16px] sm:text-xs focus:outline-none"
+                      className="w-full pl-8 pr-3 py-2 bg-white border border-neutral-200 focus:border-rose-500 rounded-xl text-neutral-900 text-[16px] sm:text-xs focus:outline-none"
                     />
                   </div>
                 </div>
@@ -949,7 +951,7 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
                   type="button"
                   onClick={() => handleRemoveBrand(brand.id)}
                   disabled={brandsConfig.length <= 1}
-                  className="hidden sm:flex p-2 text-neutral-500 hover:text-rose-400 transition-colors disabled:opacity-20 cursor-pointer shrink-0"
+                  className="hidden sm:flex p-2 text-neutral-400 hover:text-rose-600 transition-colors disabled:opacity-20 cursor-pointer shrink-0"
                   title="Eliminar marca"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -963,19 +965,19 @@ export const MultibrandSection: React.FC<MultibrandSectionProps> = ({
             <button
               type="button"
               onClick={handleAddBrandSlot}
-              className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold rounded-xl border border-neutral-700 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-bold rounded-xl border border-neutral-200 transition-colors cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5 text-rose-400" />
+              <Plus className="w-3.5 h-3.5 text-rose-500" />
               <span>Agregar otro emprendimiento</span>
             </button>
           </div>
 
           {/* Summary and Next */}
-          <div className="flex items-center justify-between pt-3 border-t border-neutral-800">
+          <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
             <button
               type="button"
               onClick={onBack}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-400 hover:text-white cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-neutral-600 hover:text-neutral-900 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
               <span>Atrás</span>

@@ -50,9 +50,9 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [phase, setPhase] = useState<
-    'intro' | 'countdown' | 'revealing_winner' | 'final_summary' | 'finalizing'
-  >('intro');
-  const [statusMessage, setStatusMessage] = useState<string>('Cargando participantes...');
+    'countdown' | 'revealing_winner' | 'final_summary' | 'thank_you' | 'finalizing'
+  >('countdown');
+  const [statusMessage, setStatusMessage] = useState<string>('El sorteo comienza en...');
   const [recordingActive, setRecordingActive] = useState<boolean>(true);
   const [recordingError, setRecordingError] = useState<string | null>(null);
 
@@ -60,6 +60,8 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
   const chunksRef = useRef<Blob[]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
+  const lastPhaseRef = useRef<string>('countdown');
+  const lastStatusRef = useRef<string>('El sorteo comienza en...');
 
   // Preload avatars & custom logos to ensure canvas renders them instantly
   const imageCache = useRef<Map<string, HTMLImageElement>>(new Map());
@@ -68,14 +70,24 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
   const CANVAS_WIDTH = 1080;
   const CANVAS_HEIGHT = 1920;
 
-  // Helper to load and cache an image with crossOrigin = 'anonymous'
-  const loadAndCacheImage = (key: string, url: string) => {
+  // Helper to load and cache an image with crossOrigin = 'anonymous' and optional fallback
+  const loadAndCacheImage = (key: string, url: string, fallbackUrl?: string) => {
     if (!url || imageCache.current.has(key)) return;
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.src = url;
     img.onload = () => {
       imageCache.current.set(key, img);
+    };
+    img.onerror = () => {
+      if (fallbackUrl && fallbackUrl !== url) {
+        const fbImg = new Image();
+        fbImg.crossOrigin = 'anonymous';
+        fbImg.src = fallbackUrl;
+        fbImg.onload = () => {
+          imageCache.current.set(key, fbImg);
+        };
+      }
     };
   };
 
@@ -90,13 +102,18 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
       postDetails.author === 'lista_personalizada' ||
       postDetails.author === 'sorteo_por_numeros';
 
+    const igAvatarFallback =
+      !isNonInstagram && postDetails.author && !postDetails.author.startsWith('sorteo_')
+        ? `/api/instagram/user-avatar?username=${encodeURIComponent(postDetails.author)}`
+        : undefined;
+
     // 1. Preload Organizer Logo (Custom logo, or host avatar, or user-avatar endpoint)
     if (postDetails.customLogoUrl) {
-      loadAndCacheImage('host_logo', postDetails.customLogoUrl);
+      loadAndCacheImage('host_logo', postDetails.customLogoUrl, igAvatarFallback);
     } else if (postDetails.authorAvatarUrl) {
-      loadAndCacheImage('host_logo', postDetails.authorAvatarUrl);
-    } else if (!isNonInstagram && postDetails.author && !postDetails.author.startsWith('sorteo_')) {
-      loadAndCacheImage('host_logo', `/api/instagram/user-avatar?username=${encodeURIComponent(postDetails.author)}`);
+      loadAndCacheImage('host_logo', postDetails.authorAvatarUrl, igAvatarFallback);
+    } else if (igAvatarFallback) {
+      loadAndCacheImage('host_logo', igAvatarFallback);
     }
 
     // 2. Preload Winners' Avatars (Instagram profile photo or fallback avatar)
@@ -127,15 +144,25 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Supported mimeType for video recording (prioritizing MP4 for native Safari/iOS compatibility)
-    const mimeTypes = [
-      'video/mp4;codecs=avc1',
-      'video/mp4',
-      'video/webm;codecs=h264',
-      'video/webm;codecs=vp9',
-      'video/webm;codecs=vp8',
-      'video/webm',
-    ];
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isIOSWebKit = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isMacSafari = /Macintosh/.test(ua) && !/Chrome|CriOS|FxiOS|EdgiOS|Edg|Firefox|Android/.test(ua);
+
+    // On all iOS browsers (WebKit) & macOS Safari prefer native MP4 if supported; on Android/Desktop Chrome prefer WebM VP8 -> ffmpeg transcode
+    const mimeTypes = isIOSWebKit || isMacSafari
+      ? [
+          'video/mp4;codecs=avc1',
+          'video/mp4',
+          'video/webm;codecs=vp8',
+          'video/webm',
+        ]
+      : [
+          'video/webm;codecs=vp8',
+          'video/webm;codecs=vp9',
+          'video/webm',
+          'video/mp4;codecs=avc1',
+          'video/mp4',
+        ];
     let selectedMimeType = '';
     for (const type of mimeTypes) {
       if (typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(type)) {
@@ -148,7 +175,17 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
     try {
       if (typeof canvas.captureStream === 'function' && typeof MediaRecorder !== 'undefined') {
         const stream = canvas.captureStream(30); // 30 FPS for smooth, efficient rendering
-        recorder = new MediaRecorder(stream, selectedMimeType ? { mimeType: selectedMimeType } : undefined);
+        const recorderOptions: MediaRecorderOptions = {
+          videoBitsPerSecond: 1_400_000, // ~1.4 Mbps: sharp graphics with lightweight upload for fast mobile sharing
+        };
+        if (selectedMimeType) {
+          recorderOptions.mimeType = selectedMimeType;
+        }
+        try {
+          recorder = new MediaRecorder(stream, recorderOptions);
+        } catch {
+          recorder = new MediaRecorder(stream, selectedMimeType ? { mimeType: selectedMimeType } : undefined);
+        }
         recorderRef.current = recorder;
         chunksRef.current = [];
 
@@ -158,7 +195,7 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
           }
         };
 
-        recorder.start(100);
+        recorder.start(250);
         setRecordingActive(true);
       } else {
         setRecordingError('Grabación no compatible en este navegador. Se continuará con certificado.');
@@ -170,9 +207,23 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
       setRecordingActive(false);
     }
 
-    // Animation timeline parameters
+    const updateUiPhase = (nextPhase: 'countdown' | 'revealing_winner' | 'final_summary' | 'thank_you' | 'finalizing') => {
+      if (lastPhaseRef.current !== nextPhase) {
+        lastPhaseRef.current = nextPhase;
+        setPhase(nextPhase);
+      }
+    };
+
+    const updateUiStatus = (nextStatus: string) => {
+      if (lastStatusRef.current !== nextStatus) {
+        lastStatusRef.current = nextStatus;
+        setStatusMessage(nextStatus);
+      }
+    };
+
+    // Animation timeline parameters (participants are already loaded: start countdown immediately!)
     startTimeRef.current = performance.now();
-    let currentPhase: 'intro' | 'countdown' | 'revealing_winner' | 'final_summary' | 'done' = 'intro';
+    let currentPhase: 'countdown' | 'revealing_winner' | 'final_summary' | 'thank_you' | 'done' = 'countdown';
     let phaseStartTime = performance.now();
 
     // Confetti particles pool
@@ -200,9 +251,9 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
     // Dynamic timing per winner
     const totalWinners = winners.length;
     const winnerSlotDuration = totalWinners === 1 ? 4000 : totalWinners <= 4 ? 3200 : 2500;
-    const introDuration = 2800; // 2.8s intro loading
-    const countdownDuration = 3200; // 3.2s countdown (3, 2, 1, SORTEANDO)
-    const finalSummaryDuration = 4800; // 4.8s final summary with all winners
+    const countdownDuration = 3200; // 3.2s countdown (3, 2, 1, ¡SORTEANDO!)
+    const finalSummaryDuration = 4200; // 4.2s final summary with all winners
+    const thankYouDuration = 3800; // 3.8s animated "GRACIAS POR PARTICIPAR" + large circular IG logo outro
 
     let currentWinnerIdx = 0;
     let rouletteShuffleIndex = 0;
@@ -357,105 +408,31 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
       ctx.restore();
 
       // ====================================================
-      // PHASE 1: INTRO "CARGANDO PARTICIPANTES"
+      // PHASE 1: COUNTDOWN ("El sorteo comienza en... 3, 2, 1, SORTEANDO")
       // ====================================================
-      if (currentPhase === 'intro') {
-        const progress = Math.min(1, phaseElapsed / introDuration);
-
-        // Large circular logo of Instagram / Organizer in center
-        const logoY = 680;
-        const logoRadius = 120; // 240px diameter
-
-        // Animated pulsating outer ring
-        const pulseScale = 1 + Math.sin(phaseElapsed * 0.006) * 0.04;
-        ctx.save();
-        ctx.translate(CANVAS_WIDTH / 2, logoY);
-        ctx.scale(pulseScale, pulseScale);
-        ctx.beginPath();
-        ctx.arc(0, 0, logoRadius + 14, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(244, 63, 94, 0.35)';
-        ctx.lineWidth = 5;
-        ctx.stroke();
-        ctx.restore();
-
-        // Draw Organizer logo
-        const hostKey = 'host_logo';
+      if (currentPhase === 'countdown') {
+        // Organizer Circular Logo & Ready Badge cleanly above countdown
+        const logoY = 430;
+        const logoRadius = 86;
         const hostFallbackName = postDetails.author || 'Sorteo';
-        drawAvatarCircle(ctx, hostKey, hostFallbackName, CANVAS_WIDTH / 2, logoY, logoRadius, '#F43F5E', 8);
+        drawAvatarCircle(ctx, 'host_logo', hostFallbackName, CANVAS_WIDTH / 2, logoY, logoRadius, '#DD2A7B', 7);
 
-        // Host account name under logo
         ctx.save();
-        ctx.fillStyle = '#18181B';
-        ctx.font = '800 42px "Plus Jakarta Sans", sans-serif';
+        ctx.fillStyle = '#10B981';
+        ctx.font = '800 26px "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText(
-          postDetails.author && !postDetails.author.startsWith('sorteo_')
-            ? `@${postDetails.author.replace(/^@/, '')}`
-            : 'Sorteo Verificado',
+          `✓ ${participants.length.toLocaleString()} participantes listos`,
           CANVAS_WIDTH / 2,
-          logoY + logoRadius + 65
+          logoY + logoRadius + 48
         );
-
-        // "Cargando participantes..." title with animated dots
-        const dotsCount = Math.floor((phaseElapsed / 400) % 4);
-        const dotsStr = '.'.repeat(dotsCount);
-        ctx.fillStyle = '#18181B';
-        ctx.font = '800 36px "Plus Jakarta Sans", sans-serif';
-        ctx.fillText(`Cargando participantes${dotsStr}`, CANVAS_WIDTH / 2, 1020);
-
-        // Dynamic Loading Progress Bar
-        const barW = 680;
-        const barH = 20;
-        const barX = (CANVAS_WIDTH - barW) / 2;
-        const barY = 1080;
-
-        // Background track (clean light gray)
-        ctx.fillStyle = '#E4E4E7';
-        roundRect(ctx, barX, barY, barW, barH, 10);
-        ctx.fill();
-
-        // Active animated gradient bar in Instagram sunset palette
-        const fillW = Math.max(20, barW * progress);
-        const barGrad = ctx.createLinearGradient(barX, barY, barX + fillW, barY);
-        barGrad.addColorStop(0, '#F58529');
-        barGrad.addColorStop(0.5, '#DD2A7B');
-        barGrad.addColorStop(1, '#8134AF');
-        ctx.fillStyle = barGrad;
-        roundRect(ctx, barX, barY, fillW, barH, 10);
-        ctx.fill();
-
-        // Dynamic counter of participants scanned
-        const currentCount = Math.min(participants.length, Math.floor(progress * participants.length));
-        ctx.fillStyle = '#71717A';
-        ctx.font = '700 26px "JetBrains Mono", monospace';
-        ctx.fillText(
-          `${currentCount.toLocaleString()} participantes verificados`,
-          CANVAS_WIDTH / 2,
-          1150
-        );
-
-        ctx.restore();
-
-        if (phaseElapsed >= introDuration) {
-          currentPhase = 'countdown';
-          phaseStartTime = now;
-          setPhase('countdown');
-          setStatusMessage('El sorteo comienza en...');
-        }
-      }
-
-      // ====================================================
-      // PHASE 2: COUNTDOWN ("El sorteo comienza en... 3, 2, 1, SORTEANDO")
-      // ====================================================
-      else if (currentPhase === 'countdown') {
-        ctx.save();
 
         // Small top text: "El sorteo comienza en..."
         ctx.fillStyle = '#E11D48';
         ctx.font = '800 34px "Plus Jakarta Sans", sans-serif';
         ctx.textAlign = 'center';
         ctx.letterSpacing = '2px';
-        ctx.fillText('EL SORTEO COMIENZA EN...', CANVAS_WIDTH / 2, 580);
+        ctx.fillText('EL SORTEO COMIENZA EN...', CANVAS_WIDTH / 2, 640);
 
         // 4 sub-steps: 0-750ms -> 3, 750-1500ms -> 2, 1500-2250ms -> 1, 2250-3200ms -> ¡SORTEANDO!
         const stepIdx = Math.floor(phaseElapsed / 750);
@@ -463,12 +440,12 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
         const scale = 1.35 - subElapsed * 0.35;
         const alpha = Math.min(1, 0.4 + (1 - subElapsed) * 0.6);
 
-        ctx.translate(CANVAS_WIDTH / 2, 850);
+        ctx.translate(CANVAS_WIDTH / 2, 895);
         ctx.scale(scale, scale);
 
         if (stepIdx <= 2) {
           const numberVal = 3 - stepIdx;
-          setStatusMessage(`El sorteo comienza en ${numberVal}...`);
+          updateUiStatus(`El sorteo comienza en ${numberVal}...`);
 
           // Shockwave pulsing rings
           ctx.beginPath();
@@ -491,7 +468,7 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
           ctx.fillText(`${numberVal}`, 0, 0);
         } else {
           // Final countdown pulse: "¡SORTEANDO!"
-          setStatusMessage('¡SORTEANDO GANADORES!');
+          updateUiStatus('¡SORTEANDO GANADORES!');
 
           ctx.fillStyle = '#E11D48';
           ctx.font = '900 76px "Plus Jakarta Sans", sans-serif';
@@ -511,12 +488,12 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
           phaseStartTime = now;
           currentWinnerIdx = 0;
           hasBurstForWinner = false;
-          setPhase('revealing_winner');
+          updateUiPhase('revealing_winner');
         }
       }
 
       // ====================================================
-      // PHASE 3: SEQUENTIAL WINNER REVEAL
+      // PHASE 2: SEQUENTIAL WINNER REVEAL
       // ====================================================
       else if (currentPhase === 'revealing_winner') {
         const winner = winners[currentWinnerIdx];
@@ -528,12 +505,12 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
 
         if (isShuffling) {
           // Roulette shuffle state
-          if (Math.floor(phaseElapsed / 50) % 2 === 0) {
+          if (Math.floor(phaseElapsed / 50) % 2 === 0 && participants.length > 0) {
             rouletteShuffleIndex = (rouletteShuffleIndex + 1) % participants.length;
           }
-          const candidate = participants[rouletteShuffleIndex] || participants[0];
+          const candidate = participants[rouletteShuffleIndex] || participants[0] || winner;
 
-          setStatusMessage(`Buscando Ganador #${currentWinnerIdx + 1}...`);
+          updateUiStatus(`Buscando Ganador #${currentWinnerIdx + 1}...`);
 
           // Shuffling Card Box
           const boxY = 620;
@@ -563,7 +540,7 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
           ctx.fillText(`BUSCANDO GANADOR #${currentWinnerIdx + 1}`, CANVAS_WIDTH / 2, boxY + 8);
 
           // Shuffling candidate avatar
-          const candClean = (candidate.username || '').replace(/^@/, '');
+          const candClean = (candidate?.username || '').replace(/^@/, '');
           drawAvatarCircle(ctx, `p_${candClean.toLowerCase()}`, candClean, CANVAS_WIDTH / 2, boxY + 160, 65, '#F43F5E', 4);
 
           // Shuffling candidate username
@@ -571,12 +548,13 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
           ctx.font = '800 48px "Plus Jakarta Sans", sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'alphabetic';
-          ctx.fillText(formatName(candidate.username), CANVAS_WIDTH / 2, boxY + 310);
+          ctx.fillText(formatName(candidate?.username || ''), CANVAS_WIDTH / 2, boxY + 310);
 
-          // Shuffling candidate comment
+          // Shuffling candidate comment (null-safe)
           ctx.fillStyle = '#71717A';
           ctx.font = '500 26px "Plus Jakarta Sans", sans-serif';
-          const candComment = candidate.comment.length > 55 ? candidate.comment.substring(0, 52) + '...' : candidate.comment;
+          const rawCandComment = candidate?.comment || 'Participando en el sorteo';
+          const candComment = rawCandComment.length > 55 ? rawCandComment.substring(0, 52) + '...' : rawCandComment;
           ctx.fillText(`"${candComment}"`, CANVAS_WIDTH / 2, boxY + 375);
 
           // PRNG Verification tag
@@ -591,7 +569,7 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
             createConfettiBurst(120, 650);
           }
 
-          setStatusMessage(`¡GANADOR #${currentWinnerIdx + 1}: ${formatName(winner?.username)}!`);
+          updateUiStatus(`¡GANADOR #${currentWinnerIdx + 1}: ${formatName(winner?.username || '')}!`);
 
           const cardY = 510;
           const isMultibrand = Boolean(winner?.assignedBrand || winner?.assignedPrize || postDetails.multibrandBrandsConfig);
@@ -713,18 +691,18 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
           } else {
             currentPhase = 'final_summary';
             phaseStartTime = now;
-            setPhase('final_summary');
-            setStatusMessage('¡Lista Oficial de Ganadores!');
+            updateUiPhase('final_summary');
+            updateUiStatus('¡Lista Oficial de Ganadores!');
             createConfettiBurst(140, 500);
           }
         }
       }
 
       // ====================================================
-      // PHASE 4: FINAL SUMMARY ("Luego a lo ultimo recien colocar la lista de ganadores completos")
+      // PHASE 3: FINAL SUMMARY ("Luego a lo ultimo recien colocar la lista de ganadores completos")
       // ====================================================
       else if (currentPhase === 'final_summary') {
-        setStatusMessage('¡Lista Oficial de Ganadores Completa!');
+        updateUiStatus('¡Lista Oficial de Ganadores Completa!');
 
         ctx.save();
         // Title banner
@@ -851,11 +829,131 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
         ctx.fillText(`Verificado en sorteoo.app · ${formattedDate}`, CANVAS_WIDTH / 2, 1760);
         ctx.restore();
 
-        // Finish recording after holding final summary
+        // Transition from final summary to "GRACIAS POR PARTICIPAR" animated outro
         if (phaseElapsed >= finalSummaryDuration) {
+          currentPhase = 'thank_you';
+          phaseStartTime = now;
+          updateUiPhase('thank_you');
+          updateUiStatus('¡Gracias por participar!');
+          createConfettiBurst(90, 760);
+        }
+      }
+
+      // ====================================================
+      // PHASE 4: ANIMATED OUTRO ("¡GRACIAS POR PARTICIPAR!" + LARGE ROUND IG LOGO)
+      // ====================================================
+      else if (currentPhase === 'thank_you') {
+        updateUiStatus('¡Gracias por participar!');
+
+        const logoCenterX = CANVAS_WIDTH / 2;
+        const logoCenterY = 760 + Math.sin(phaseElapsed * 0.004) * 10;
+        const logoRadius = 160; // 320px large round organizer logo
+        const pulseScale = 1 + Math.sin(phaseElapsed * 0.005) * 0.04;
+        const entryProgress = Math.min(1, phaseElapsed / 550);
+        const popScale = 0.75 + 0.25 * (1 - Math.pow(1 - entryProgress, 3));
+
+        // 1. Animated rotating Instagram gradient halo ring around large circular logo
+        ctx.save();
+        ctx.translate(logoCenterX, logoCenterY);
+        ctx.scale(pulseScale * popScale, pulseScale * popScale);
+
+        // Outer soft glowing aura
+        const outerAura = ctx.createRadialGradient(0, 0, logoRadius, 0, 0, logoRadius + 75);
+        outerAura.addColorStop(0, 'rgba(221, 42, 123, 0.28)');
+        outerAura.addColorStop(0.6, 'rgba(245, 133, 41, 0.14)');
+        outerAura.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = outerAura;
+        ctx.beginPath();
+        ctx.arc(0, 0, logoRadius + 75, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Spinning gradient ring
+        ctx.save();
+        ctx.rotate(phaseElapsed * 0.0022);
+        const ringGrad = ctx.createLinearGradient(-logoRadius - 20, -logoRadius - 20, logoRadius + 20, logoRadius + 20);
+        ringGrad.addColorStop(0, '#F58529');
+        ringGrad.addColorStop(0.45, '#DD2A7B');
+        ringGrad.addColorStop(0.8, '#8134AF');
+        ringGrad.addColorStop(1, '#F58529');
+        ctx.strokeStyle = ringGrad;
+        ctx.lineWidth = 14;
+        ctx.beginPath();
+        ctx.arc(0, 0, logoRadius + 22, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Orbiting sparkling stars around the circular logo
+        for (let s = 0; s < 4; s++) {
+          const angle = (s * Math.PI) / 2;
+          const sx = Math.cos(angle) * (logoRadius + 52);
+          const sy = Math.sin(angle) * (logoRadius + 52);
+          const twinkle = 0.65 + 0.35 * Math.sin(phaseElapsed * 0.008 + s * 1.5);
+          ctx.fillStyle = s % 2 === 0 ? '#F58529' : '#DD2A7B';
+          ctx.globalAlpha = twinkle;
+          ctx.beginPath();
+          ctx.arc(sx, sy, 10 * twinkle, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.restore();
+
+        ctx.restore();
+
+        // 2. Large Circular Organizer Instagram Logo inside the animated ring
+        ctx.save();
+        ctx.translate(logoCenterX, logoCenterY);
+        ctx.scale(pulseScale * popScale, pulseScale * popScale);
+        const hostFallbackName = postDetails.author || 'Sorteo';
+        drawAvatarCircle(ctx, 'host_logo', hostFallbackName, 0, 0, logoRadius, '#FFFFFF', 10);
+        ctx.restore();
+
+        // 3. Organizer @handle below the large circular logo
+        ctx.save();
+        const hasIgHandle =
+          postDetails.author &&
+          !postDetails.author.startsWith('sorteo_') &&
+          postDetails.author !== 'lista_personalizada';
+        const displayOrganizer = hasIgHandle
+          ? `@${postDetails.author.replace(/^@/, '')}`
+          : 'Sorteo Oficial Certificado';
+
+        ctx.fillStyle = '#18181B';
+        ctx.font = '800 38px "Plus Jakarta Sans", sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(displayOrganizer, CANVAS_WIDTH / 2, logoCenterY + logoRadius + 95);
+
+        // 4. Animated headline: "GRACIAS POR PARTICIPAR"
+        const textAlpha = Math.min(1, phaseElapsed / 500);
+        const textSlideY = (1 - Math.min(1, phaseElapsed / 500)) * 30;
+        ctx.globalAlpha = textAlpha;
+
+        const titleY = 1135 + textSlideY;
+        const textGrad = ctx.createLinearGradient(CANVAS_WIDTH / 2 - 360, titleY - 50, CANVAS_WIDTH / 2 + 360, titleY);
+        textGrad.addColorStop(0, '#F58529');
+        textGrad.addColorStop(0.5, '#DD2A7B');
+        textGrad.addColorStop(1, '#8134AF');
+        ctx.fillStyle = textGrad;
+        ctx.font = '900 66px "Plus Jakarta Sans", sans-serif';
+        ctx.fillText('¡GRACIAS POR', CANVAS_WIDTH / 2, titleY);
+        ctx.fillText('PARTICIPAR!', CANVAS_WIDTH / 2, titleY + 76);
+
+        ctx.fillStyle = '#52525B';
+        ctx.font = '700 28px "Plus Jakarta Sans", sans-serif';
+        ctx.fillText('¡Felicidades a los ganadores y mucha suerte en el próximo!', CANVAS_WIDTH / 2, titleY + 145);
+
+        // Verification footer
+        ctx.fillStyle = '#71717A';
+        ctx.font = '700 24px "JetBrains Mono", monospace';
+        ctx.fillText(`Certificado: ${audit.verificationCode}`, CANVAS_WIDTH / 2, 1720);
+        ctx.fillStyle = '#A1A1AA';
+        ctx.font = '600 20px "Plus Jakarta Sans", sans-serif';
+        ctx.fillText('Verificado en sorteoo.app', CANVAS_WIDTH / 2, 1760);
+        ctx.restore();
+
+        // Finish recording after holding animated thank-you outro
+        if (phaseElapsed >= thankYouDuration) {
           currentPhase = 'done';
-          setPhase('finalizing');
-          setStatusMessage('Generando archivo de video oficial...');
+          updateUiPhase('finalizing');
+          updateUiStatus('Generando archivo de video oficial...');
 
           if (recorder && recorder.state === 'recording') {
             recorder.onstop = () => {
@@ -975,7 +1073,7 @@ export const LiveGiveawayStage: React.FC<LiveGiveawayStageProps> = ({
         <p className="text-xs text-neutral-500 font-medium">
           {phase === 'finalizing'
             ? 'Completando y procesando el archivo de video para Stories y Reels...'
-            : 'Grabando video vertical en alta definición 1080×1920 a 60 FPS.'}
+            : 'Grabando video vertical en alta definición 1080×1920 a 30 FPS.'}
         </p>
       </div>
     </div>

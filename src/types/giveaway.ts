@@ -4,12 +4,68 @@ export interface User {
   email: string;
   avatar: string;
   createdAt: string;
+  role?: 'user' | 'admin';
   instagramConfig?: {
     appId?: string;
     accessToken?: string;
     sessionId?: string;
     isConnected?: boolean;
   };
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  discountPercent: number;
+  maxUses: number;
+  usedCount: number;
+  active: boolean;
+  description?: string;
+  createdAt: string;
+}
+
+export interface PaymentConfigPublic {
+  giveawayPrice: number;
+  currency: 'ARS';
+  mpConfigured: boolean;
+  mpPublicKey?: string;
+}
+
+export interface CouponValidationResult {
+  valid: boolean;
+  code: string;
+  discountPercent: number;
+  basePrice: number;
+  discountAmount: number;
+  finalAmount: number;
+  isFree: boolean;
+  remainingUses: number;
+  description?: string;
+}
+
+export interface PaymentOrder {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  method: 'mercadopago' | 'coupon_100';
+  baseAmount: number;
+  discountPercent: number;
+  finalAmount: number;
+  couponCode?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  mpPreferenceId?: string;
+  mpPaymentId?: string;
+  giveawaySummary?: string;
+  createdAt: string;
+  approvedAt?: string;
+}
+
+export interface AdminPaymentSettings {
+  giveawayPrice: number;
+  currency: 'ARS';
+  hasAccessToken: boolean;
+  accessTokenMasked: string;
+  mpPublicKey: string;
 }
 
 export interface MultibrandBrandConfig {

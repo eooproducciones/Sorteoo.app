@@ -28,6 +28,8 @@ interface GiveawayResultsViewProps {
   videoBlob: Blob | null;
   videoDataUrl: string | null;
   recordingError?: string;
+  isPreparingVideo?: boolean;
+  waitForVideoReady?: () => Promise<void>;
   onNewGiveaway: () => void;
   onGoToHistory: () => void;
 }
@@ -37,6 +39,8 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
   videoBlob,
   videoDataUrl,
   recordingError,
+  isPreparingVideo = false,
+  waitForVideoReady,
   onNewGiveaway,
   onGoToHistory,
 }) => {
@@ -45,6 +49,16 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
   const [copiedCaption, setCopiedCaption] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [downloadingVideo, setDownloadingVideo] = useState(false);
+  const [videoStatusError, setVideoStatusError] = useState<string | null>(null);
+
+  const cachedMovFileRef = React.useRef<File | null>(null);
+  const fetchPromiseRef = React.useRef<Promise<File> | null>(null);
+
+  useEffect(() => {
+    cachedMovFileRef.current = null;
+    fetchPromiseRef.current = null;
+    setVideoStatusError(null);
+  }, [giveaway.id]);
 
   useEffect(() => {
     // Launch a celebratory confetti blast on mounting results view
@@ -58,11 +72,20 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
     } catch (e) {
       // ignore
     }
-  }, []);
+  }, [giveaway.id]);
+
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isAppleMobile = /iPad|iPhone|iPod/.test(ua) || (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isLocalUnplayableWebm = Boolean(
+    isAppleMobile &&
+    videoDataUrl?.startsWith('blob:') &&
+    (videoBlob?.type || '').toLowerCase().includes('webm')
+  );
 
   const videoSrc =
-    videoDataUrl ||
-    (giveaway.video?.hasVideo ? `/api/giveaways/${giveaway.id}/video-stream` : null);
+    isLocalUnplayableWebm
+      ? null
+      : (videoDataUrl || (giveaway.video?.hasVideo ? `/api/giveaways/${giveaway.id}/video-stream` : null));
 
   const formatName = (u: string) => {
     if (!u) return '';
@@ -70,41 +93,90 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
     return `@${u.replace(/^@/, '')}`;
   };
 
-  // Download video file from backend with universal macOS, iOS, Android, and Windows compatibility
+  // Wait for upload + deterministic server .MOV generation
+  const fetchMovVideoFile = async (): Promise<File> => {
+    if (cachedMovFileRef.current) {
+      return cachedMovFileRef.current;
+    }
+    if (fetchPromiseRef.current) {
+      return fetchPromiseRef.current;
+    }
+
+    const task = (async () => {
+      if (waitForVideoReady) {
+        await waitForVideoReady();
+      }
+
+      // Poll status briefly if ffmpeg conversion is still active on the server
+      for (let attempt = 0; attempt < 45; attempt++) {
+        try {
+          const statusRes = await fetch(`/api/giveaways/${giveaway.id}/video-status`, {
+            cache: 'no-store',
+          });
+          if (!statusRes.ok) break;
+          const status = await statusRes.json();
+          if (!status.converting) break;
+        } catch {
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 300));
+      }
+
+      const response = await fetch(`/api/giveaways/${giveaway.id}/download-video`, { cache: 'no-store' });
+
+      if (response.ok) {
+        const contentType = (response.headers.get('content-type') || '').toLowerCase();
+        const rawBlob = await response.blob();
+        if (rawBlob.size >= 1000 && (contentType.includes('video/quicktime') || contentType.includes('video/mp4'))) {
+          const videoFile = new File([rawBlob], `sorteoo_ganadores_${giveaway.id}.mov`, {
+            type: 'video/quicktime',
+          });
+          cachedMovFileRef.current = videoFile;
+          return videoFile;
+        }
+      }
+
+      throw new Error('No se pudo preparar el video. Intentá nuevamente.');
+    })();
+
+    fetchPromiseRef.current = task;
+    try {
+      return await task;
+    } finally {
+      fetchPromiseRef.current = null;
+    }
+  };
+
+  // Pre-cache .MOV in background so Download & WhatsApp Share Sheet trigger instantaneously
+  useEffect(() => {
+    if (!isPreparingVideo && giveaway.video?.hasVideo && !cachedMovFileRef.current) {
+      fetchMovVideoFile().catch(() => {
+        // Silent prefetch; explicit tap will retry and surface any error
+      });
+    }
+  }, [isPreparingVideo, giveaway.id, giveaway.video?.hasVideo]);
+
+  // Download universal .MOV compatible across devices and browsers
   const handleDownloadVideo = async () => {
+    setVideoStatusError(null);
     setDownloadingVideo(true);
     try {
-      // Fetch from dedicated conversion endpoint that serves true H.264 baseline yuv420p MP4
-      const downloadUrl = `/api/giveaways/${giveaway.id}/download-video`;
-      const response = await fetch(downloadUrl);
-      if (response.ok) {
-        const blob = await response.blob();
-        const mp4Blob = new Blob([blob], { type: 'video/mp4' });
-        const url = URL.createObjectURL(mp4Blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `sorteoo_ganadores_${giveaway.id}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 3000);
-      } else {
-        throw new Error('Endpoint returned ' + response.status);
-      }
-    } catch (err) {
-      console.warn('Direct fetch failed, falling back to local recording blob:', err);
-      if (videoBlob) {
-        const url = URL.createObjectURL(videoBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `sorteoo_ganadores_${giveaway.id}.mp4`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 3000);
-      }
+      const videoFile = await fetchMovVideoFile();
+      const url = URL.createObjectURL(videoFile);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = videoFile.name;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch (err: any) {
+      console.warn('Video download error:', err);
+      setVideoStatusError(
+        err?.message || 'No se pudo descargar el video. Intentá nuevamente.'
+      );
     } finally {
-      setTimeout(() => setDownloadingVideo(false), 800);
+      setTimeout(() => setDownloadingVideo(false), 400);
     }
   };
 
@@ -156,29 +228,25 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
     setShareModalOpen(true);
   };
 
-  // Native mobile sharing handler with MP4 file attachment
+  // Native mobile sharing handler with pre-cached lightweight .MOV file
   const handleNativeMobileShare = async () => {
     const shareText = generateInstagramCaption();
+    setVideoStatusError(null);
     try {
-      let fileToShare: File | null = null;
-      try {
-        const res = await fetch(`/api/giveaways/${giveaway.id}/download-video`);
-        if (res.ok) {
-          const blob = await res.blob();
-          fileToShare = new File([blob], `sorteoo_ganadores_${giveaway.id}.mp4`, { type: 'video/mp4' });
+      let fileToShare: File | null = cachedMovFileRef.current;
+      if (!fileToShare) {
+        setDownloadingVideo(true);
+        try {
+          fileToShare = await fetchMovVideoFile();
+        } catch {
+          fileToShare = null;
+        } finally {
+          setDownloadingVideo(false);
         }
-      } catch (e) {
-        // ignore
-      }
-
-      if (!fileToShare && videoBlob) {
-        fileToShare = new File([videoBlob], `sorteoo_ganadores_${giveaway.id}.mp4`, { type: 'video/mp4' });
       }
 
       if (navigator.share && fileToShare && navigator.canShare && navigator.canShare({ files: [fileToShare] })) {
         await navigator.share({
-          title: 'Ganadores Sorteo Instagram - sorteoo.app',
-          text: shareText,
           files: [fileToShare],
         });
         return;
@@ -193,6 +261,7 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       console.warn('Native mobile share error:', err);
+      setVideoStatusError('Para enviar por WhatsApp o Instagram, primero tocá "Descargar video" y elegilo desde tu galería.');
     }
   };
 
@@ -341,11 +410,17 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
             <div className="relative aspect-[9/16] bg-neutral-100 rounded-2xl overflow-hidden shadow-2xl border-2 border-neutral-200 ring-4 ring-rose-500/20">
               {videoSrc ? (
                 <video
+                  key={videoSrc}
                   src={videoSrc}
                   controls
                   playsInline
                   className="w-full h-full object-cover"
                 />
+              ) : isLocalUnplayableWebm || isPreparingVideo ? (
+                <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-neutral-50">
+                  <div className="w-9 h-9 rounded-full border-4 border-rose-500 border-t-transparent animate-spin mb-3" />
+                  <p className="text-xs text-neutral-800 font-bold">Preparando vista previa...</p>
+                </div>
               ) : (
                 <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-neutral-50">
                   <AlertCircle className="w-10 h-10 text-amber-500 mb-2" />
@@ -374,7 +449,7 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
                 Video Oficial del Sorteo
               </h2>
               <p className="text-xs sm:text-sm text-neutral-600 mt-1 leading-relaxed">
-                El video vertical de transparencia está listo. Descárgalo para reproducirlo nativamente en tu Mac, iPhone, Android o Windows, y compártelo directo a Stories o Reels.
+                El video vertical del sorteo está listo para descargar y compartir directo en tus Stories, Reels o WhatsApp.
               </p>
             </div>
 
@@ -393,25 +468,45 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
                 </span>
               </div>
               <div className="bg-neutral-50 border border-neutral-200 p-2.5 rounded-xl text-center">
-                <span className="text-[10px] text-neutral-500 block font-semibold">Formato</span>
-                <span className="text-sm sm:text-base font-black text-rose-600">
-                  Universal
+                <span className="text-[10px] text-neutral-500 block font-semibold">Estado</span>
+                <span className="text-sm sm:text-base font-black text-emerald-600">
+                  Certificado
                 </span>
               </div>
             </div>
 
             {/* Primary Action Buttons */}
             <div className="space-y-2.5 pt-1">
-              {/* Descargar Video Button (No "(mp4)" as requested) */}
+              {videoStatusError && (
+                <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{videoStatusError}</span>
+                </div>
+              )}
+
+              {/* Descargar Video Button (.MOV) */}
               <button
                 type="button"
                 onClick={handleDownloadVideo}
                 disabled={downloadingVideo}
-                className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 bg-gradient-to-r from-red-500 via-rose-500 to-amber-500 hover:from-red-600 hover:via-rose-600 hover:to-amber-600 disabled:opacity-50 text-white text-sm sm:text-base font-black rounded-2xl shadow-xl shadow-rose-500/25 transition-all transform active:scale-[0.98] cursor-pointer"
+                className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 bg-gradient-to-r from-[#F58529] via-[#DD2A7B] to-[#8134AF] hover:opacity-95 disabled:opacity-60 text-white text-sm sm:text-base font-black rounded-2xl shadow-xl shadow-rose-500/25 transition-all transform active:scale-[0.98] cursor-pointer"
               >
                 <Download className="w-5 h-5 shrink-0" />
-                <span>{downloadingVideo ? 'Preparando video universal...' : 'Descargar video'}</span>
+                <span>{downloadingVideo ? 'Descargando video...' : 'Descargar video'}</span>
               </button>
+
+              {/* Direct Mobile Share (iOS "Guardar en Fotos" / WhatsApp / Instagram) */}
+              {typeof navigator !== 'undefined' && 'share' in navigator && (
+                <button
+                  type="button"
+                  onClick={handleNativeMobileShare}
+                  disabled={downloadingVideo || isPreparingVideo}
+                  className="w-full flex items-center justify-center gap-2.5 px-5 py-3.5 bg-neutral-900 hover:bg-black disabled:opacity-60 text-white text-sm sm:text-base font-black rounded-2xl shadow-lg transition-all transform active:scale-[0.98] cursor-pointer"
+                >
+                  <Share2 className="w-5 h-5 shrink-0" />
+                  <span>{isPreparingVideo ? 'Preparando video...' : 'Enviar por WhatsApp / Guardar en Fotos'}</span>
+                </button>
+              )}
 
               {/* Compartir en Instagram Button */}
               <button
@@ -669,7 +764,7 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
 
             {/* Step-by-Step Practical Sharing Action Flow */}
             <div className="space-y-3">
-              {/* Step 1: Download Video (MP4 Universal) */}
+              {/* Step 1: Download Video (.MOV) */}
               <button
                 type="button"
                 onClick={handleDownloadVideo}
@@ -686,11 +781,11 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
                         Paso 1
                       </span>
                       <span className="text-xs sm:text-sm font-black text-neutral-900">
-                        Descargar Video MP4
+                        Descargar Video
                       </span>
                     </div>
                     <span className="text-[11px] text-neutral-600 block mt-0.5">
-                      Compatible con iPhone, Mac, Android y WhatsApp
+                      Guarda el video oficial del sorteo en tu dispositivo
                     </span>
                   </div>
                 </div>
@@ -733,16 +828,6 @@ export const GiveawayResultsView: React.FC<GiveawayResultsViewProps> = ({
                 href="https://www.instagram.com/"
                 target="_blank"
                 rel="noopener noreferrer"
-                onClick={() => {
-                  // Attempt safe app launch on mobile
-                  const now = Date.now();
-                  window.location.href = 'instagram://app';
-                  setTimeout(() => {
-                    if (Date.now() - now < 1500) {
-                      window.open('https://www.instagram.com/', '_blank');
-                    }
-                  }, 500);
-                }}
                 className="w-full flex items-center justify-between p-3.5 bg-gradient-to-r from-neutral-50 to-purple-50 hover:from-neutral-100 hover:to-purple-100 border-2 border-neutral-200 hover:border-purple-300 rounded-2xl transition-all text-left cursor-pointer group"
               >
                 <div className="flex items-center gap-3">

@@ -1,4 +1,12 @@
-import { Giveaway, Participant, User } from '../types/giveaway';
+import {
+  AdminPaymentSettings,
+  Coupon,
+  CouponValidationResult,
+  Giveaway,
+  PaymentConfigPublic,
+  PaymentOrder,
+  User,
+} from '../types/giveaway';
 
 const TOKEN_KEY = 'sorteoo_auth_token';
 
@@ -89,40 +97,182 @@ export const api = {
   },
 
   // Instagram Profile Wall / Post Feed
-  async getInstagramProfileFeed(username: string, paginationToken?: string): Promise<{ profile: any }> {
+  async getInstagramProfileFeed(
+    username: string,
+    paginationToken?: string
+  ): Promise<{ success?: boolean; isPrivate?: boolean; message?: string; profile: any }> {
     return this.request('/api/instagram/profile-feed', {
       method: 'POST',
       body: JSON.stringify({ username, paginationToken }),
     });
   },
 
-  // Instagram Post Parser
+  // Silent background prefetch when user previews an Instagram post
+  async prefetchInstagramComments(
+    postUrl: string,
+    author?: string,
+    caption?: string,
+    commentsCount?: number
+  ) {
+    try {
+      await fetch('/api/instagram/prefetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ postUrl, author, caption, commentsCount }),
+      });
+    } catch {
+      // Best-effort prefetch
+    }
+  },
+
+  // Progressive Instagram Post Parser with real-time percentage polling
+  async parseInstagramPostWithProgress(
+    postUrl: string,
+    options: {
+      author?: string;
+      caption?: string;
+      commentsCount?: number;
+      rawCommentsText?: string;
+      participants?: any[];
+      forceRefresh?: boolean;
+      onProgress?: (progress: {
+        percent: number;
+        loadedCount: number;
+        totalEstimated: number;
+        pagesFetched: number;
+      }) => void;
+    } = {}
+  ) {
+    const {
+      author,
+      caption,
+      commentsCount,
+      rawCommentsText,
+      participants,
+      forceRefresh = false,
+      onProgress,
+    } = options;
+
+    const startRes = await this.request('/api/instagram/parse-start', {
+      method: 'POST',
+      body: JSON.stringify({
+        postUrl,
+        author,
+        caption,
+        commentsCount,
+        rawCommentsText,
+        participants,
+        forceRefresh,
+      }),
+    });
+
+    if (onProgress) {
+      onProgress({
+        percent: typeof startRes.percent === 'number' ? startRes.percent : startRes.status === 'done' ? 100 : 5,
+        loadedCount: startRes.loadedCount || 0,
+        totalEstimated: startRes.totalEstimated || commentsCount || 0,
+        pagesFetched: startRes.pagesFetched || 0,
+      });
+    }
+
+    if (startRes.status === 'done') {
+      return startRes;
+    }
+
+    const jobId = startRes.jobId;
+    const pollStartedAt = Date.now();
+    const MAX_POLL_MS = 260000;
+
+    while (Date.now() - pollStartedAt < MAX_POLL_MS) {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const statusRes = await this.request(`/api/instagram/parse-status/${encodeURIComponent(jobId)}`);
+      if (onProgress) {
+        onProgress({
+          percent: typeof statusRes.percent === 'number' ? statusRes.percent : 10,
+          loadedCount: statusRes.loadedCount || 0,
+          totalEstimated: statusRes.totalEstimated || commentsCount || 0,
+          pagesFetched: statusRes.pagesFetched || 0,
+        });
+      }
+      if (statusRes.status === 'done') {
+        return statusRes;
+      }
+    }
+
+    throw new Error('La carga de comentarios tardó demasiado. Intenta nuevamente.');
+  },
+
+  // Instagram Post Parser (backwards-compatible wrapper)
   async parseInstagramPost(
     postUrl: string,
-    useDemoComments: boolean = false,
     author?: string,
     caption?: string,
     commentsCount?: number,
     rawCommentsText?: string,
     participants?: any[]
   ) {
-    return this.request('/api/instagram/parse', {
-      method: 'POST',
-      body: JSON.stringify({
-        postUrl,
-        useDemoComments,
-        author,
-        caption,
-        commentsCount,
-        rawCommentsText,
-        participants,
-      }),
+    return this.parseInstagramPostWithProgress(postUrl, {
+      author,
+      caption,
+      commentsCount,
+      rawCommentsText,
+      participants,
     });
   },
 
   // Giveaways
   async getGiveaways(): Promise<{ giveaways: Giveaway[] }> {
     return this.request('/api/giveaways');
+  },
+
+  async getGiveawaysByIds(ids: string[]): Promise<{ giveaways: Giveaway[] }> {
+    return this.request('/api/giveaways/by-ids', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+  },
+
+  async claimGuestGiveaways(ids: string[]): Promise<{ claimedCount: number }> {
+    return this.request('/api/giveaways/claim', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    });
+  },
+
+  saveLocalGiveawaySnapshot(giveaway: Giveaway) {
+    try {
+      if (typeof localStorage === 'undefined' || !giveaway?.id) return;
+      const existing = this.getLocalGiveawaySnapshots();
+      const merged = [giveaway, ...existing.filter((g) => g.id !== giveaway.id)].slice(0, 30);
+      localStorage.setItem('sorteoo_recent_giveaways', JSON.stringify(merged));
+    } catch {
+      // Ignore storage quota errors
+    }
+  },
+
+  getLocalGiveawaySnapshots(): Giveaway[] {
+    try {
+      if (typeof localStorage === 'undefined') return [];
+      const raw = localStorage.getItem('sorteoo_recent_giveaways');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((g) => g && g.id) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  removeLocalGiveawaySnapshot(id: string) {
+    try {
+      if (typeof localStorage === 'undefined') return;
+      const existing = this.getLocalGiveawaySnapshots();
+      localStorage.setItem(
+        'sorteoo_recent_giveaways',
+        JSON.stringify(existing.filter((g) => g.id !== id))
+      );
+    } catch {
+      // ignore
+    }
   },
 
   async getGiveawayById(id: string): Promise<{ giveaway: Giveaway }> {
@@ -154,6 +304,37 @@ export const api = {
     mimeType: string,
     durationSeconds: number
   ) {
+    const CHUNK_SIZE = 3 * 1024 * 1024; // 3 MB chunks safely stay far below 32 MB proxy limits
+    if (videoBlob.size > 2.5 * 1024 * 1024) {
+      const totalChunks = Math.ceil(videoBlob.size / CHUNK_SIZE);
+      for (let i = 0; i < totalChunks; i++) {
+        const start = i * CHUNK_SIZE;
+        const end = Math.min(videoBlob.size, start + CHUNK_SIZE);
+        const chunk = videoBlob.slice(start, end);
+        const chunkQuery = new URLSearchParams({
+          chunkIndex: String(i),
+          totalChunks: String(totalChunks),
+          mimeType: mimeType || 'video/webm',
+        }).toString();
+        const chunkRes = await fetch(`/api/giveaways/${giveawayId}/video-chunk?${chunkQuery}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/octet-stream' },
+          body: chunk,
+        });
+        if (!chunkRes.ok) {
+          throw new Error(`Error al subir fragmento ${i + 1}/${totalChunks}: HTTP ${chunkRes.status}`);
+        }
+      }
+      return this.request(`/api/giveaways/${giveawayId}/video-finalize`, {
+        method: 'POST',
+        body: JSON.stringify({
+          totalChunks,
+          mimeType: mimeType || 'video/webm',
+          durationSeconds: durationSeconds || 12,
+        }),
+      });
+    }
+
     const query = new URLSearchParams({
       mimeType: mimeType || 'video/webm',
       durationSeconds: String(durationSeconds || 12),
@@ -247,6 +428,112 @@ export const api = {
       throw new Error(data.error || 'Código no válido');
     }
     return data;
+  },
+
+  // Payments & Coupons (Checkout)
+  async getPaymentConfig(): Promise<PaymentConfigPublic> {
+    return this.request('/api/payments/config');
+  },
+
+  async validateCoupon(code: string): Promise<CouponValidationResult> {
+    return this.request('/api/coupons/validate', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+  },
+
+  async redeemFreeCoupon(
+    code: string,
+    giveawaySummary?: string
+  ): Promise<{ approved: boolean; order: PaymentOrder; couponCode: string; discountPercent: number }> {
+    return this.request('/api/coupons/redeem-free', {
+      method: 'POST',
+      body: JSON.stringify({ code, giveawaySummary }),
+    });
+  },
+
+  async createMercadoPagoPreference(payload: {
+    couponCode?: string;
+    returnUrl: string;
+    giveawaySummary?: string;
+    drawConfig?: any;
+  }): Promise<{
+    externalReference: string;
+    preferenceId: string;
+    initPoint: string;
+    finalAmount: number;
+    discountPercent: number;
+  }> {
+    return this.request('/api/payments/create-preference', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getPaymentStatus(
+    externalReference: string,
+    paymentId?: string
+  ): Promise<{
+    approved: boolean;
+    status: string;
+    order: PaymentOrder;
+    drawConfig?: any;
+  }> {
+    const q = paymentId ? `?paymentId=${encodeURIComponent(paymentId)}` : '';
+    return this.request(`/api/payments/status/${encodeURIComponent(externalReference)}${q}`);
+  },
+
+  // Admin Panel Endpoints
+  async getAdminSettings(): Promise<AdminPaymentSettings> {
+    return this.request('/api/admin/settings');
+  },
+
+  async updateAdminSettings(payload: {
+    mpAccessToken?: string;
+    mpPublicKey?: string;
+    giveawayPrice?: number;
+    clearToken?: boolean;
+  }): Promise<{ message: string; settings: AdminPaymentSettings }> {
+    return this.request('/api/admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getAdminCoupons(): Promise<{ coupons: Coupon[] }> {
+    return this.request('/api/admin/coupons');
+  },
+
+  async createAdminCoupon(payload: {
+    code: string;
+    discountPercent: number;
+    maxUses: number;
+    description?: string;
+  }): Promise<{ message: string; coupon: Coupon }> {
+    return this.request('/api/admin/coupons', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async updateAdminCoupon(
+    id: string,
+    updates: { active?: boolean; discountPercent?: number; maxUses?: number; description?: string }
+  ): Promise<{ message: string; coupon: Coupon }> {
+    return this.request(`/api/admin/coupons/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  async deleteAdminCoupon(id: string): Promise<{ message: string }> {
+    return this.request(`/api/admin/coupons/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  async getAdminPayments(): Promise<{ payments: PaymentOrder[] }> {
+    return this.request('/api/admin/payments');
   },
 };
 
